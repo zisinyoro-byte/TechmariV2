@@ -919,31 +919,40 @@
             // Z-Score signal label
             const zScoreSignal = zs.combinedSignalLabel || "Neutral";
 
+            // BTTS Confidence
+            const bttsConfidence = getConfidence(pred.bttsProb, 'btts');
+
             // Evaluate each criterion
             const criteria = [
                 {
-                    name: 'O1.5 Odds Range (1.06-1.10)',
+                    name: 'O1.5 Odds Range (1.06-1.15)',
                     value: o15Odds.toFixed(2),
-                    passed: o15Odds >= 1.06 && o15Odds <= 1.10,
-                    failReason: o15Odds < 1.06 ? 'Too low (overconfident)' : o15Odds > 1.10 ? 'Too high (underconfident)' : ''
+                    passed: o15Odds >= 1.06 && o15Odds <= 1.15,
+                    failReason: o15Odds < 1.06 ? 'Too low (overconfident)' : o15Odds > 1.15 ? 'Too high (underconfident)' : ''
                 },
                 {
-                    name: 'BTTS Odds Range (1.31-1.40)',
+                    name: 'BTTS Odds Range (1.30-1.50)',
                     value: bttsOdds.toFixed(2),
-                    passed: bttsOdds >= 1.31 && bttsOdds <= 1.40,
-                    failReason: bttsOdds < 1.31 ? 'Too low (overconfident)' : bttsOdds > 1.40 ? 'Too high (underconfident)' : ''
+                    passed: bttsOdds >= 1.30 && bttsOdds <= 1.50,
+                    failReason: bttsOdds < 1.30 ? 'Too low (overconfident)' : bttsOdds > 1.50 ? 'Too high (underconfident)' : ''
                 },
                 {
-                    name: 'O2.5 Prob Range (68%-79%)',
+                    name: 'O2.5 Prob Range (68%-80%)',
                     value: pred.over25Prob.toFixed(1) + '%',
-                    passed: pred.over25Prob >= 68 && pred.over25Prob <= 79,
-                    failReason: pred.over25Prob < 68 ? 'Below 68%' : pred.over25Prob > 79 ? 'Above 79% (overconfident)' : ''
+                    passed: pred.over25Prob >= 68 && pred.over25Prob <= 80,
+                    failReason: pred.over25Prob < 68 ? 'Below 68%' : pred.over25Prob > 80 ? 'Above 80% (overconfident)' : ''
                 },
                 {
                     name: 'No Predicted Clean Sheet',
                     value: `Home CS: ${homeCleanSheetProb.toFixed(1)}% | Away CS: ${awayCleanSheetProb.toFixed(1)}%`,
                     passed: noPredictedCleanSheet,
                     failReason: homeCleanSheetProb >= 35 ? `Home CS risk ${homeCleanSheetProb.toFixed(1)}%` : awayCleanSheetProb >= 35 ? `Away CS risk ${awayCleanSheetProb.toFixed(1)}%` : ''
+                },
+                {
+                    name: 'BTTS Confidence: Medium',
+                    value: bttsConfidence,
+                    passed: bttsConfidence === 'Medium',
+                    failReason: bttsConfidence !== 'Medium' ? `Is: ${bttsConfidence}` : ''
                 },
                 {
                     name: 'Regression: Mixed (Over Lean)',
@@ -960,26 +969,26 @@
             ];
 
             const passCount = criteria.filter(c => c.passed).length;
-            const allHit = passCount === 6;
+            const allHit = passCount === 7;
             const failedCriteria = criteria.filter(c => !c.passed).map(c => c.failReason || c.name);
 
-            lastSweetSpotResult = { criteria, passCount, allHit, failedCriteria, o15Odds, bttsOdds, homeCleanSheetProb, awayCleanSheetProb, regressionSignal, zScoreSignal };
+            lastSweetSpotResult = { criteria, passCount, allHit, failedCriteria, o15Odds, bttsOdds, homeCleanSheetProb, awayCleanSheetProb, bttsConfidence, regressionSignal, zScoreSignal };
 
             // Update badge in prediction results
             const badge = document.getElementById('sweetSpotBadge');
             badge.style.display = 'inline-block';
             badge.className = 'sweet-spot-badge ' + (allHit ? 'hit' : 'miss');
-            badge.innerHTML = allHit ? '&#128293; SWEET SPOT HIT' : `Sweet Spot: ${passCount}/6`;
+            badge.innerHTML = allHit ? '&#128293; SWEET SPOT HIT' : `Sweet Spot: ${passCount}/7`;
 
             // Update banner in checklist section
             const banner = document.getElementById('sweetSpotBanner');
             banner.style.display = 'block';
             banner.className = 'sweet-spot-banner ' + (allHit ? 'hit' : 'miss');
-            document.getElementById('sweetSpotBannerTitle').innerHTML = allHit ? '&#128293; SWEET SPOT &mdash; ALL 6 CRITERIA MET' : `Sweet Spot: ${passCount}/6 criteria met`;
+            document.getElementById('sweetSpotBannerTitle').innerHTML = allHit ? '&#128293; SWEET SPOT &mdash; ALL 7 CRITERIA MET' : `Sweet Spot: ${passCount}/7 criteria met`;
 
             const detailEl = document.getElementById('sweetSpotBannerDetail');
             if (allHit) {
-                detailEl.innerHTML = `O1.5 Odds: ${o15Odds.toFixed(2)} | BTTS Odds: ${bttsOdds.toFixed(2)} | O2.5: ${pred.over25Prob.toFixed(1)}% | Regression: ${regressionSignal} | Z-Score: ${zScoreSignal}`;
+                detailEl.innerHTML = `O1.5 Odds: ${o15Odds.toFixed(2)} | BTTS Odds: ${bttsOdds.toFixed(2)} | O2.5: ${pred.over25Prob.toFixed(1)}% | BTTS Conf: ${bttsConfidence} | Regression: ${regressionSignal} | Z-Score: ${zScoreSignal}`;
             } else {
                 detailEl.innerHTML = `Missing: ${failedCriteria.join(', ')}`;
             }
