@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Techmari Pro FP1</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f6f8;
+            color: #333333;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 1000px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        h2 { color: #0056b3; margin-top: 0; text-align: center; font-size: 28px; }
+        p { text-align: center; color: #666; font-size: 15px; }
+        h3 { color: #34495e; border-bottom: 2px solid #e9ecef; padding-bottom: 10px; margin-top: 30px; font-size: 20px; }
+        textarea {
+            width: 100%;
+            height: 150px;
+            background-color: #f8f9fa;
+            border: 1px solid #ced4da;
+            color: #495057;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            resize: vertical;
+            margin-bottom: 15px;
+            font-size: 13px;
+            box-sizing: border-box;
+            transition: border 0.3s;
+        }
+        textarea:focus { outline: none; border-color: #0056b3; background-color: #fff; }
+        .actions { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        button {
+            flex: 1;
+            padding: 12px;
+            font-size: 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            min-width: 120px;
+            transition: transform 0.1s, opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; transform: translateY(-1px); }
+        button:active { transform: translateY(1px); }
+        .btn-process { background-color: #0056b3; color: white; }
+        .btn-upload { background-color: #fd7e14; color: white; }
+        .btn-download { background-color: #28a745; color: white; }
+        .btn-predict { background-color: #dc3545; color: white; }
+        .btn-export { background-color: #6f42c1; color: white; }
+        button:disabled { background-color: #adb5bd; color: #fff; cursor: not-allowed; transform: none; }
+        .status { text-align: center; margin-bottom: 10px; font-weight: bold; color: #dc3545; font-size: 14px; }
+        .table-wrapper {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            background: #fff;
+            margin-top: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e9ecef; }
+        th { background-color: #f8f9fa; color: #495057; position: sticky; top: 0; font-weight: 600; z-index: 1; }
+        tr:hover { background-color: #f1f3f5; }
+        tr:nth-child(even) { background-color: #fcfcfc; }
+        .hidden { display: none; }
+        #predictionSection { background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e9ecef; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .prediction-controls { display: flex; gap: 20px; margin-bottom: 20px; align-items: flex-end; }
+        .control-group { flex: 1; }
+        label { display: block; margin-bottom: 5px; color: #6c757d; font-size: 13px; font-weight: 500; }
+        select { width: 100%; padding: 10px; background: #fff; border: 1px solid #ced4da; color: #495057; border-radius: 4px; font-size: 14px; }
+        .results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .prob-box { background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef; }
+        .prob-title { color: #6c757d; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+        .prob-value { font-size: 32px; font-weight: bold; color: #0056b3; margin: 5px 0; }
+        .prob-sub { font-size: 13px; color: #6c757d; }
+        .score-probability { margin-top: 10px; font-size: 14px; color: #495057; border-top: 1px solid #dee2e6; padding-top: 10px; }
+        .market-results { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 15px; }
+        .market-box { background: #f8f9fa; padding: 12px; border-radius: 6px; text-align: center; border: 1px solid #e9ecef; }
+        .market-title { color: #6c757d; font-size: 11px; text-transform: uppercase; margin-bottom: 5px; font-weight: 600; }
+        .market-value { font-size: 18px; font-weight: bold; color: #fd7e14; }
+        #insightsSection { background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e9ecef; margin-top: 20px; }
+        .insights-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .insight-card { background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #fd7e14; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .insight-label { font-size: 12px; color: #6c757d; margin-bottom: 5px; font-weight: 600; }
+        .insight-data { font-size: 18px; font-weight: bold; color: #34495e; }
+        .team-stats-container { display: flex; gap: 20px; margin-bottom: 20px; }
+        .team-stat-box { flex: 1; background: #f8f9fa; padding: 15px; border-radius: 6px; border-top: 4px solid #0056b3; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .team-name-title { font-size: 18px; font-weight: bold; color: #34495e; margin-bottom: 10px; text-align: center; }
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px; border-bottom: 1px solid #e9ecef; padding-bottom: 3px; }
+        .stat-label { color: #6c757d; }
+        .stat-value { font-weight: 600; color: #495057; }
+        #matchupInsights { background: #f8f9fa; padding: 15px; border-radius: 6px; margin-top: 15px; border: 1px solid #e9ecef; }
+        .matchup-title { font-size: 16px; color: #0056b3; margin-bottom: 10px; border-bottom: 1px solid #dee2e6; padding-bottom: 5px; font-weight: bold; }
+        #highProbTeamsSection { background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e9ecef; margin-top: 20px; }
+        .high-prob-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .high-prob-grid { grid-template-columns: 1fr; } }
+        .high-prob-column { background: #f8f9fa; border-radius: 8px; padding: 15px; border: 1px solid #e9ecef; }
+        .high-prob-column h4 { margin: 0 0 15px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #6c757d; border-bottom: 2px solid #dee2e6; padding-bottom: 8px; }
+        .high-prob-column.over15 h4 { border-color: #28a745; }
+        .high-prob-column.btts h4 { border-color: #17a2b8; }
+        .team-prob-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; margin-bottom: 5px; background: white; border-radius: 4px; transition: transform 0.1s; }
+        .team-prob-row:hover { transform: translateX(3px); }
+        .team-prob-row.top-3 { border-left: 3px solid #28a745; }
+        .team-prob-row.top-3.btts { border-left-color: #17a2b8; }
+        .team-prob-name { font-weight: 600; color: #34495e; font-size: 13px; }
+        .team-prob-value { font-weight: bold; font-size: 14px; padding: 2px 10px; border-radius: 12px; }
+        .team-prob-value.high { background: #d4edda; color: #155724; }
+        .team-prob-value.very-high { background: #28a745; color: white; }
+        .team-prob-value.btts-high { background: #d1ecf1; color: #0c5460; }
+        .team-prob-value.btts-very-high { background: #17a2b8; color: white; }
+        .prob-bar-container { width: 100%; height: 6px; background: #e9ecef; border-radius: 3px; margin-top: 5px; overflow: hidden; }
+        .prob-bar { height: 100%; border-radius: 3px; transition: width 0.3s ease; }
+        .prob-bar.over15 { background: linear-gradient(90deg, #28a745, #20c997); }
+        .prob-bar.btts { background: linear-gradient(90deg, #17a2b8, #20c997); }
+        .highlight-badge { display: inline-block; background: #dc3545; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 5px; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        .no-data-message { text-align: center; color: #6c757d; font-style: italic; padding: 20px; }
+        #attackWeakDefenseSection { background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e9ecef; margin-top: 20px; }
+        .awd-team-card { background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%); border-radius: 8px; padding: 15px; margin-bottom: 12px; border-left: 4px solid #6f42c1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; }
+        .awd-team-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .awd-team-card.top-tier { border-left-color: #e83e8c; background: linear-gradient(135deg, #fff5f7 0%, #fff 100%); }
+        .awd-team-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .awd-team-name { font-size: 16px; font-weight: bold; color: #34495e; }
+        .awd-score-badge { background: #6f42c1; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+        .awd-score-badge.hot { background: linear-gradient(90deg, #e83e8c, #fd7e14); }
+        .awd-stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        @media (max-width: 600px) { .awd-stats-row { grid-template-columns: repeat(2, 1fr); } }
+        .awd-stat-item { text-align: center; padding: 8px; background: white; border-radius: 6px; border: 1px solid #e9ecef; }
+        .awd-stat-label { font-size: 10px; text-transform: uppercase; color: #6c757d; letter-spacing: 0.5px; margin-bottom: 3px; }
+        .awd-stat-value { font-size: 16px; font-weight: bold; color: #495057; }
+        .awd-stat-value.good { color: #28a745; }
+        .awd-stat-value.bad { color: #dc3545; }
+        .awd-stat-value.purple { color: #6f42c1; }
+        .awd-meter { margin-top: 10px; display: flex; gap: 5px; align-items: center; }
+        .awd-meter-label { font-size: 11px; color: #6c757d; min-width: 80px; }
+        .awd-meter-bar { flex: 1; height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden; display: flex; }
+        .awd-meter-fill { height: 100%; border-radius: 4px; }
+        .awd-meter-fill.attack { background: linear-gradient(90deg, #28a745, #20c997); }
+        .awd-meter-fill.defense { background: linear-gradient(90deg, #dc3545, #fd7e14); }
+        .awd-explanation { background: #f8f9fa; border-radius: 6px; padding: 12px; margin-bottom: 15px; border: 1px dashed #ced4da; }
+        .awd-explanation p { text-align: left; font-size: 12px; color: #6c757d; margin: 0; line-height: 1.5; }
+        #deviationAnalysisSection { background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e9ecef; margin-top: 20px; }
+        .deviation-period-selector { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
+        .period-btn { padding: 8px 16px; border: 2px solid #dee2e6; background: white; border-radius: 20px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s; }
+        .period-btn:hover { border-color: #0056b3; background: #f8f9fa; }
+        .period-btn.active { border-color: #0056b3; background: #0056b3; color: white; }
+        .deviation-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        @media (max-width: 768px) { .deviation-grid { grid-template-columns: 1fr; } }
+        .deviation-team-card { background: #f8f9fa; border-radius: 10px; padding: 18px; border: 1px solid #e9ecef; }
+        .deviation-team-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #dee2e6; }
+        .deviation-team-name { font-size: 16px; font-weight: bold; color: #34495e; }
+        .deviation-stat-block { margin-bottom: 12px; }
+        .deviation-stat-label { font-size: 11px; text-transform: uppercase; color: #6c757d; margin-bottom: 4px; letter-spacing: 0.5px; }
+        .deviation-stat-value { font-size: 14px; color: #495057; }
+        .deviation-stat-value .highlight-green { color: #28a745; font-weight: bold; }
+        .deviation-stat-value .highlight-red { color: #dc3545; font-weight: bold; }
+        .deviation-comparison { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 5px; }
+        .deviation-arrow { font-size: 16px; }
+        .deviation-arrow.up { color: #28a745; }
+        .deviation-arrow.down { color: #dc3545; }
+        .deviation-signal-box { background: white; border-radius: 8px; padding: 12px; margin-top: 10px; border-left: 4px solid #6c757d; }
+        .deviation-signal-box.regression-up { border-left-color: #28a745; background: linear-gradient(90deg, #d4edda 0%, white 100%); }
+        .deviation-signal-box.regression-down { border-left-color: #dc3545; background: linear-gradient(90deg, #f8d7da 0%, white 100%); }
+        .deviation-signal-box.neutral { border-left-color: #fd7e14; background: linear-gradient(90deg, #fff3cd 0%, white 100%); }
+        .signal-title { font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
+        .signal-title.up { color: #28a745; }
+        .signal-title.down { color: #dc3545; }
+        .signal-title.neutral { color: #fd7e14; }
+        .signal-text { font-size: 13px; color: #495057; }
+        .combined-signal-box { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 10px; padding: 20px; text-align: center; border: 2px solid #dee2e6; }
+        .combined-signal-box.strong-over { background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); border-color: #28a745; }
+        .combined-signal-box.strong-under { background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%); border-color: #dc3545; }
+        .combined-signal-box.caution { background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%); border-color: #fd7e14; }
+        .combined-signal-title { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #6c757d; margin-bottom: 10px; }
+        .combined-signal-value { font-size: 20px; font-weight: bold; color: #34495e; margin-bottom: 8px; }
+        .combined-signal-desc { font-size: 13px; color: #495057; }
+        .combined-signal-recommendation { margin-top: 12px; padding: 10px 20px; border-radius: 20px; font-weight: bold; font-size: 14px; display: inline-block; }
+        .combined-signal-recommendation.over { background: #28a745; color: white; }
+        .combined-signal-recommendation.under { background: #dc3545; color: white; }
+        .combined-signal-recommendation.caution { background: #fd7e14; color: white; }
+        .last-h2h-box { background: white; border-radius: 6px; padding: 12px; margin-bottom: 12px; border: 1px solid #e9ecef; }
+        .last-h2h-title { font-size: 11px; text-transform: uppercase; color: #6c757d; margin-bottom: 5px; font-weight: 600; }
+        .last-h2h-score { font-size: 20px; font-weight: bold; color: #34495e; }
+        .last-h2h-analysis { font-size: 12px; color: #495057; margin-top: 5px; }
+        .deviation-meter { margin-top: 8px; }
+        .deviation-meter-bar { height: 8px; background: #e9ecef; border-radius: 4px; position: relative; overflow: hidden; }
+        .deviation-meter-center { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: #6c757d; transform: translateX(-50%); }
+        .deviation-meter-fill.below { background: linear-gradient(90deg, #dc3545, #fd7e14); }
+        .deviation-meter-fill.above { background: linear-gradient(90deg, #28a745, #20c997); }
+        .deviation-meter-labels { display: flex; justify-content: space-between; font-size: 10px; color: #6c757d; margin-top: 3px; }
+        #strongBetSection { background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e9ecef; margin-top: 20px; }
+        .checklist-container { background: #f8f9fa; border-radius: 8px; padding: 20px; border: 1px solid #e9ecef; }
+        .checklist-item { display: flex; align-items: center; padding: 10px; margin-bottom: 8px; background: white; border-radius: 6px; border-left: 4px solid #6c757d; transition: all 0.2s; }
+        .checklist-item.checked { border-left-color: #28a745; background: #d4edda; }
+        .checklist-item.unchecked { border-left-color: #dc3545; background: #fff; }
+        .checklist-icon { font-size: 20px; margin-right: 12px; width: 24px; text-align: center; }
+        .checklist-text { flex: 1; font-size: 14px; color: #495057; }
+        .checklist-value { font-weight: bold; font-size: 13px; padding: 4px 10px; border-radius: 4px; background: #e9ecef; }
+        .checklist-value.pass { background: #28a745; color: white; }
+        .checklist-value.fail { background: #dc3545; color: white; }
+        .bet-verdict { margin-top: 20px; padding: 20px; border-radius: 10px; text-align: center; }
+        .bet-verdict.strong { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; }
+        .bet-verdict.moderate { background: linear-gradient(135deg, #fd7e14 0%, #ffc107 100%); color: white; }
+        .bet-verdict.weak { background: linear-gradient(135deg, #6c757d 0%, #adb5bd 100%); color: white; }
+        .verdict-title { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
+        .verdict-score { font-size: 28px; font-weight: bold; }
+        .verdict-message { font-size: 14px; margin-top: 5px; }
+        .confidence-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 8px; }
+        .confidence-badge.high { background: #28a745; color: white; }
+        .confidence-badge.medium { background: #fd7e14; color: white; }
+        .confidence-badge.low { background: #6c757d; color: white; }
+        #zScoreSection { background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e9ecef; margin-top: 20px; }
+        .zscore-explanation { background: #f8f9fa; border-radius: 6px; padding: 12px; margin-bottom: 15px; border: 1px dashed #ced4da; }
+        .zscore-explanation p { text-align: left; font-size: 12px; color: #6c757d; margin: 0; line-height: 1.5; }
+        .zscore-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        @media (max-width: 768px) { .zscore-grid { grid-template-columns: 1fr; } }
+        .zscore-team-card { background: #f8f9fa; border-radius: 10px; padding: 18px; border: 1px solid #e9ecef; }
+        .zscore-team-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #dee2e6; }
+        .zscore-team-name { font-size: 16px; font-weight: bold; color: #34495e; }
+        .zscore-stat-block { margin-bottom: 12px; }
+        .zscore-stat-label { font-size: 11px; text-transform: uppercase; color: #6c757d; margin-bottom: 4px; letter-spacing: 0.5px; }
+        .zscore-stat-value { font-size: 14px; color: #495057; }
+        .zscore-value { font-size: 28px; font-weight: bold; margin: 5px 0; }
+        .zscore-value.negative { color: #28a745; }
+        .zscore-value.positive { color: #dc3545; }
+        .zscore-value.neutral-val { color: #fd7e14; }
+        .zscore-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: bold; }
+        .zscore-badge.extreme-under { background: #28a745; color: white; }
+        .zscore-badge.moderate-under { background: #d4edda; color: #155724; }
+        .zscore-badge.normal { background: #fff3cd; color: #856404; }
+        .zscore-badge.moderate-over { background: #f8d7da; color: #721c24; }
+        .zscore-badge.extreme-over { background: #dc3545; color: white; }
+        .zscore-signal-box { background: white; border-radius: 8px; padding: 12px; margin-top: 10px; border-left: 4px solid #6c757d; }
+        .zscore-signal-box.signal-up { border-left-color: #28a745; background: linear-gradient(90deg, #d4edda 0%, white 100%); }
+        .zscore-signal-box.signal-down { border-left-color: #dc3545; background: linear-gradient(90deg, #f8d7da 0%, white 100%); }
+        .zscore-signal-box.signal-neutral { border-left-color: #fd7e14; background: linear-gradient(90deg, #fff3cd 0%, white 100%); }
+        .zscore-bell-container { margin: 10px 0; text-align: center; }
+        .zscore-bell-bar { height: 10px; background: linear-gradient(90deg, #28a745 0%, #28a745 15%, #d4edda 15%, #d4edda 30%, #fff3cd 30%, #fff3cd 70%, #f8d7da 70%, #f8d7da 85%, #dc3545 85%, #dc3545 100%); border-radius: 5px; position: relative; margin: 5px 0 15px; }
+        .zscore-bell-marker { position: absolute; top: -6px; width: 3px; height: 22px; background: #34495e; border-radius: 2px; transform: translateX(-50%); transition: left 0.3s ease; }
+        .zscore-bell-marker::after { content: attr(data-label); position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: bold; color: #34495e; white-space: nowrap; }
+        .zscore-bell-labels { display: flex; justify-content: space-between; font-size: 9px; color: #6c757d; margin-top: 2px; }
+        .zscore-combined-box { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 10px; padding: 20px; text-align: center; border: 2px solid #dee2e6; }
+        .zscore-combined-box.zs-strong-over { background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); border-color: #28a745; }
+        .zscore-combined-box.zs-strong-under { background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%); border-color: #dc3545; }
+        .zscore-combined-box.zs-caution { background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%); border-color: #fd7e14; }
+        .zscore-combined-title { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #6c757d; margin-bottom: 10px; }
+        .zscore-combined-value { font-size: 20px; font-weight: bold; color: #34495e; margin-bottom: 8px; }
+        .zscore-combined-desc { font-size: 13px; color: #495057; }
+        .zscore-combined-rec { margin-top: 12px; padding: 10px 20px; border-radius: 20px; font-weight: bold; font-size: 14px; display: inline-block; }
+        .zscore-combined-rec.over { background: #28a745; color: white; }
+        .zscore-combined-rec.under { background: #dc3545; color: white; }
+        .zscore-combined-rec.caution { background: #fd7e14; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Techmari Pro FP1</h2>
+        <p>Statistical Data Processor & Prediction Engine</p>
+        <textarea id="rawInput" placeholder="Paste text data here..."></textarea>
+        <div class="actions">
+            <button onclick="processData()" class="btn-process">Process Text</button>
+            <input type="file" id="csvInput" accept=".csv" onchange="handleFileUpload(event)" style="display:none;">
+            <button onclick="document.getElementById('csvInput').click()" class="btn-upload">Upload CSV</button>
+            <button id="downloadBtn" onclick="downloadCSV()" class="btn-download" disabled>Download CSV</button>
+        </div>
+        <div id="statusArea" class="status"></div>
+        <div id="predictionSection" class="hidden">
+            <h3>Step 2: Statistical Prediction Engine</h3>
+            <p style="font-size:12px; color:#6c757d;">Select teams to calculate Expected Goals (xG), run Monte Carlo simulations, and analyze deviation/regression.</p>
+            <div class="prediction-controls">
+                <div class="control-group">
+                    <label>Home Team</label>
+                    <select id="homeTeamSelect"></select>
+                </div>
+                <div class="control-group">
+                    <label>Away Team</label>
+                    <select id="awayTeamSelect"></select>
+                </div>
+                <button onclick="runPrediction()" class="btn-predict" style="max-width: 150px;">Predict</button>
+            </div>
+            <div id="predictionResults" class="hidden">
+                <div class="results-grid">
+                    <div class="prob-box">
+                        <div class="prob-title">Home Win Probability</div>
+                        <div class="prob-value" id="homeProb">0%</div>
+                        <div class="prob-sub">Expected Goals: <span id="homeXg">0.00</span></div>
+                    </div>
+                    <div class="prob-box">
+                        <div class="prob-title">Away Win Probability</div>
+                        <div class="prob-value" id="awayProb">0%</div>
+                        <div class="prob-sub">Expected Goals: <span id="awayXg">0.00</span></div>
+                    </div>
+                </div>
+                <div class="prob-box" style="margin-top: 10px;">
+                    <div class="prob-title">Draw Probability</div>
+                    <div class="prob-value" id="drawProb" style="color:#fd7e14">0%</div>
+                    <div class="score-probability">Most Likely Score: <span id="likelyScore">0 - 0</span></div>
+                </div>
+                <div class="market-results">
+                    <div class="market-box">
+                        <div class="market-title">Over 2.5 Goals</div>
+                        <div class="market-value" id="over25Prob">0%</div>
+                    </div>
+                    <div class="market-box">
+                        <div class="market-title">Over 3.5 Goals</div>
+                        <div class="market-value" id="over35Prob">0%</div>
+                    </div>
+                    <div class="market-box">
+                        <div class="market-title">Both Teams Score (BTTS)</div>
+                        <div class="market-value" id="bttsProb">0%</div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px; text-align: center;">
+                    <button id="exportPredictionBtn" onclick="exportPredictionCSV()" class="btn-export" disabled>Export Prediction CSV</button>
+                </div>
+            </div>
+        </div>
+        <div id="strongBetSection" class="hidden">
+            <h3>Strong Bet Checklist</h3>
+            <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Automated checklist to identify strong betting opportunities</p>
+            <div class="checklist-container" id="checklistContainer">
+                <div id="checklistItems"></div>
+                <div id="betVerdict" class="bet-verdict weak">
+                    <div class="verdict-title">VERDICT</div>
+                    <div class="verdict-score" id="verdictScore">0/5</div>
+                    <div class="verdict-message" id="verdictMessage">Run prediction to analyze</div>
+                </div>
+            </div>
+        </div>
+        <div id="insightsSection" class="hidden">
+            <h3>Step 3: Summary Insights</h3>
+            <div class="insights-grid">
+                <div class="insight-card"><div class="insight-label">League Avg Goals/Game</div><div class="insight-data" id="leagueAvgGoals">-</div></div>
+                <div class="insight-card"><div class="insight-label">Best Attack</div><div class="insight-data" id="bestAttack">-</div></div>
+                <div class="insight-card"><div class="insight-label">Best Defense</div><div class="insight-data" id="bestDefense">-</div></div>
+                <div class="insight-card"><div class="insight-label">Total Matches Analyzed</div><div class="insight-data" id="totalMatches">-</div></div>
+            </div>
+            <div id="specificTeamInsights" class="hidden">
+                <div class="matchup-title">Selected Team Statistics</div>
+                <div class="team-stats-container">
+                    <div class="team-stat-box">
+                        <div class="team-name-title" id="homeStatsName">Home Team</div>
+                        <div class="stat-row"><span class="stat-label">Matches Played</span><span class="stat-value" id="homeMatches">-</span></div>
+                        <div class="stat-row"><span class="stat-label">Win Rate</span><span class="stat-value" id="homeWinRate">-</span></div>
+                        <div class="stat-row"><span class="stat-label">Avg Goals Scored</span><span class="stat-value" id="homeAvgScored">-</span></div>
+                        <div class="stat-row"><span class="stat-label">Avg Goals Conceded</span><span class="stat-value" id="homeAvgConc">-</span></div>
+                    </div>
+                    <div class="team-stat-box">
+                        <div class="team-name-title" id="awayStatsName">Away Team</div>
+                        <div class="stat-row"><span class="stat-label">Matches Played</span><span class="stat-value" id="awayMatches">-</span></div>
+                        <div class="stat-row"><span class="stat-label">Win Rate</span><span class="stat-value" id="awayWinRate">-</span></div>
+                        <div class="stat-row"><span class="stat-label">Avg Goals Scored</span><span class="stat-value" id="awayAvgScored">-</span></div>
+                        <div class="stat-row"><span class="stat-label">Avg Goals Conceded</span><span class="stat-value" id="awayAvgConc">-</span></div>
+                    </div>
+                </div>
+            </div>
+            <div id="matchupInsights" class="hidden">
+                <div class="matchup-title">Head-to-Head Analysis: <span id="h2hTeams">A vs B</span></div>
+                <p style="font-size:13px; color:#495057; margin: 5px 0;" id="h2hSummary">No history available.</p>
+            </div>
+        </div>
+        <div id="deviationAnalysisSection" class="hidden">
+            <h3>Deviation & Regression Analysis</h3>
+            <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Analyzing selected teams for over/under-performance - regression to mean signals</p>
+            <div class="deviation-period-selector">
+                <button class="period-btn active" data-period="season" onclick="setDeviationPeriod('season')">All Matches (Season)</button>
+                <button class="period-btn" data-period="last10" onclick="setDeviationPeriod('last10')">Last 10 Matches</button>
+                <button class="period-btn" data-period="h2h" onclick="setDeviationPeriod('h2h')">Historical H2H</button>
+            </div>
+            <div id="deviationResults" class="hidden">
+                <div class="deviation-grid">
+                    <div class="deviation-team-card" id="devHomeTeamCard"><div class="deviation-team-header"><span class="deviation-team-name" id="devHomeTeamName">Home Team</span></div><div id="devHomeTeamContent"></div></div>
+                    <div class="deviation-team-card" id="devAwayTeamCard"><div class="deviation-team-header"><span class="deviation-team-name" id="devAwayTeamName">Away Team</span></div><div id="devAwayTeamContent"></div></div>
+                </div>
+                <div class="combined-signal-box" id="combinedSignalBox">
+                    <div class="combined-signal-title">Combined Signal</div>
+                    <div class="combined-signal-value" id="combinedSignalValue">-</div>
+                    <div class="combined-signal-desc" id="combinedSignalDesc">Select teams to analyze</div>
+                    <div class="combined-signal-recommendation caution" id="combinedSignalRec">Waiting for analysis</div>
+                </div>
+            </div>
+        </div>
+        <div id="zScoreSection" class="hidden">
+            <h3>Z-Score Analysis</h3>
+            <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Statistical significance of recent performance deviation from the mean</p>
+            <div class="zscore-explanation">
+                <p><strong>How it works:</strong> Z-Score measures how many standard deviations recent form is from the seasonal mean. Unlike simple percentage deviation, it accounts for team consistency. A team with high variance may frequently deviate by 20%, but a Z-score of -2.0 means that deviation is statistically significant regardless of variance. Thresholds: &lt; -1.5 = Strong Underperformance (regression UP likely), -1.5 to -1.0 = Moderate Under, -1.0 to +1.0 = Normal, +1.0 to +1.5 = Moderate Over, &gt; +1.5 = Strong Overperformance (regression DOWN likely).</p>
+            </div>
+            <div id="zScoreResults" class="hidden">
+                <div class="zscore-grid">
+                    <div class="zscore-team-card" id="zscoreHomeCard"><div class="zscore-team-header"><span class="zscore-team-name" id="zscoreHomeTeamName">Home Team</span></div><div id="zscoreHomeContent"></div></div>
+                    <div class="zscore-team-card" id="zscoreAwayCard"><div class="zscore-team-header"><span class="zscore-team-name" id="zscoreAwayTeamName">Away Team</span></div><div id="zscoreAwayContent"></div></div>
+                </div>
+                <div class="zscore-combined-box" id="zscoreCombinedBox">
+                    <div class="zscore-combined-title">Combined Z-Score Signal</div>
+                    <div class="zscore-combined-value" id="zscoreCombinedValue">-</div>
+                    <div class="zscore-combined-desc" id="zscoreCombinedDesc">Select teams to analyze</div>
+                    <div class="zscore-combined-rec caution" id="zscoreCombinedRec">Waiting for analysis</div>
+                </div>
+            </div>
+        </div>
+        <div id="highProbTeamsSection" class="hidden">
+            <h3>High Probability Teams</h3>
+            <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Teams with highest probability for Over 1.5 Goals and Both Teams To Score (BTTS)</p>
+            <div class="high-prob-grid">
+                <div class="high-prob-column over15"><h4>Over 1.5 Goals</h4><div id="over15TeamsList"></div></div>
+                <div class="high-prob-column btts"><h4>Both Teams To Score</h4><div id="bttsTeamsList"></div></div>
+            </div>
+        </div>
+        <div id="attackWeakDefenseSection" class="hidden">
+            <h3>Entertaining Teams (Strong Attack + Weak Defense)</h3>
+            <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Teams that score a lot but also concede - ideal for Over goals and BTTS markets</p>
+            <div class="awd-explanation"><p><strong>How it works:</strong> Teams with high attack rating (>1.0 means above league average) AND high defense rating (>1.0 means concede more than average) are highlighted.</p></div>
+            <div id="attackWeakDefenseContent"></div>
+        </div>
+        <div id="tableContainer" class="table-wrapper hidden">
+            <table id="resultsTable">
+                <thead><tr><th>League</th><th>Round</th><th>Date</th><th>Home Team</th><th>Away Team</th><th>Home Score</th><th>Away Score</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        let globalMatches = [];
+        let teamStats = {};
+        let currentDeviationPeriod = 'season';
+        let lastSelectedHomeTeam = null;
+        let lastSelectedAwayTeam = null;
+        let lastPredictionData = null;
+        let lastDeviationData = null;
+        let lastZScoreData = null;
+
+        function isValidDate(str) { return /^\d+\.\d+\./.test(str); }
+
+        function processData() {
+            const rawInput = document.getElementById('rawInput').value;
+            const statusArea = document.getElementById('statusArea');
+            const tableBody = document.querySelector('#resultsTable tbody');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const tableContainer = document.querySelector('.table-wrapper');
+            if (!rawInput.trim()) { statusArea.innerText = "Please paste data first."; return; }
+            statusArea.innerText = "Processing...";
+            tableBody.innerHTML = "";
+            globalMatches = [];
+            const lines = rawInput.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            let currentLeague = "Unknown";
+            let currentRound = "Unknown";
+            function isMerged(str) {
+                if (/\d/.test(str)) return false;
+                if (str.length < 4) return false;
+                if (str.split(' ').length === 2 && str.split(' ')[0] === str.split(' ')[1]) return true;
+                let half = Math.floor(str.length / 2);
+                return (str.substring(0, half).replace(/\s/g, '') === str.substring(half).replace(/\s/g, ''));
+            }
+            function unmerge(str) { return str.substring(0, Math.floor(str.length / 2)).trim(); }
+            let i = 0;
+            while (i < lines.length) {
+                let line = lines[i];
+                if (["Summary", "Odds", "Fixtures", "Archive", "Standings", "Sport network:", "Advertisement", "AD"].includes(line)) { i++; continue; }
+                if (line.toLowerCase().startsWith("round") || line.includes("finals") || line.includes("group") || line.includes("1/")) { currentRound = line; i++; continue; }
+                if (i < 5) { currentLeague = line; i++; continue; }
+                if (isMerged(line)) {
+                    let homeTeam = unmerge(line); i++;
+                    while (i < lines.length && !isMerged(lines[i])) { if (lines[i].includes('.') && lines[i].length < 10) break; i++; }
+                    if (i >= lines.length) break;
+                    let awayTeam = unmerge(lines[i]); i++;
+                    let scoreLine = lines[i]; let scoreStr = scoreLine.toString(); let mid = Math.floor(scoreStr.length / 2);
+                    let hScore = scoreStr.substring(0, mid); let aScore = scoreStr.substring(mid); i++;
+                    let date = lines[i]; i++;
+                    if (isValidDate(date)) { globalMatches.push({ league: currentLeague, round: currentRound, date: date, homeTeam: homeTeam, awayTeam: awayTeam, homeScore: parseInt(hScore), awayScore: parseInt(aScore), notes: "Format 3" }); }
+                    continue;
+                }
+                if (i + 1 < lines.length && line === lines[i+1]) {
+                    let homeTeam = line; i += 2;
+                    if (i + 1 < lines.length) {
+                        let awayTeam = lines[i]; i += 2;
+                        let hScore = 0, aScore = 0, notes = "";
+                        if (i < lines.length && lines[i] === "Pen") { notes = "Penalty Shootout"; i++; if (i < lines.length) hScore = lines[i]; if (i+1 < lines.length) aScore = lines[i+1]; i += 4; }
+                        else { if (i < lines.length) hScore = lines[i]; if (i+1 < lines.length) aScore = lines[i+1]; i += 2; }
+                        let date = "Unknown Date"; if (i < lines.length) { date = lines[i]; i++; }
+                        if (isValidDate(date)) { globalMatches.push({ league: currentLeague, round: currentRound, date: date, homeTeam: homeTeam, awayTeam: awayTeam, homeScore: parseInt(hScore), awayScore: parseInt(aScore), notes: notes }); }
+                        continue;
+                    }
+                }
+                i++;
+            }
+            renderTable(statusArea, downloadBtn, tableContainer, tableBody);
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0]; if (!file) return;
+            const statusArea = document.getElementById('statusArea');
+            const tableBody = document.querySelector('#resultsTable tbody');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const tableContainer = document.querySelector('.table-wrapper');
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const rows = text.split('\n').filter(row => row.trim() !== "");
+                globalMatches = [];
+                for (let i = 1; i < rows.length; i++) {
+                    const cols = rows[i].split(',');
+                    if (cols.length >= 5) {
+                        const clean = (str) => str ? str.replace(/"/g, '').trim() : "";
+                        globalMatches.push({ date: clean(cols[0]), homeTeam: clean(cols[1]), awayTeam: clean(cols[2]), homeScore: parseInt(clean(cols[3])), awayScore: parseInt(clean(cols[4])), league: "Imported", round: "Unknown" });
+                    }
+                }
+                renderTable(statusArea, downloadBtn, tableContainer, tableBody);
+            };
+            reader.readAsText(file); event.target.value = '';
+        }
+
+        function renderTable(statusArea, downloadBtn, tableContainer, tableBody) {
+            if (globalMatches.length > 0) {
+                statusArea.innerText = `Successfully processed ${globalMatches.length} matches. System Ready.`; statusArea.style.color = "#28a745";
+                downloadBtn.disabled = false; tableContainer.classList.remove('hidden');
+                globalMatches.forEach(m => { const row = `<tr><td>${m.league}</td><td>${m.round}</td><td>${m.date}</td><td>${m.homeTeam}</td><td>${m.awayTeam}</td><td>${m.homeScore}</td><td>${m.awayScore}</td></tr>`; tableBody.innerHTML += row; });
+                initSystem();
+            } else { statusArea.innerText = "No matches found. Please check the text format."; statusArea.style.color = "#dc3545"; }
+        }
+
+        function initSystem() {
+            calculateTeamStats(); populateDropdowns(); calculateLeagueInsights(); calculateHighProbabilityTeams(); calculateAttackWeakDefenseTeams();
+            document.getElementById('predictionSection').classList.remove('hidden');
+            document.getElementById('insightsSection').classList.remove('hidden');
+            document.getElementById('highProbTeamsSection').classList.remove('hidden');
+            document.getElementById('attackWeakDefenseSection').classList.remove('hidden');
+            document.getElementById('deviationAnalysisSection').classList.remove('hidden');
+            document.getElementById('zScoreSection').classList.remove('hidden');
+            document.getElementById('strongBetSection').classList.remove('hidden');
+        }
+
+        function calculateTeamStats() {
+            const teams = {}; if (globalMatches.length === 0) return;
+            const leagueHomeAvg = globalMatches.reduce((a, b) => a + b.homeScore, 0) / globalMatches.length;
+            const leagueAwayAvg = globalMatches.reduce((a, b) => a + b.awayScore, 0) / globalMatches.length;
+            globalMatches.forEach(m => {
+                if (!teams[m.homeTeam]) teams[m.homeTeam] = { hGoals: 0, aGoals: 0, hConc: 0, aConc: 0, hGames: 0, aGames: 0 };
+                if (!teams[m.awayTeam]) teams[m.awayTeam] = { hGoals: 0, aGoals: 0, hConc: 0, aConc: 0, hGames: 0, aGames: 0 };
+                teams[m.homeTeam].hGoals += m.homeScore; teams[m.homeTeam].hConc += m.awayScore; teams[m.homeTeam].hGames++;
+                teams[m.awayTeam].aGoals += m.awayScore; teams[m.awayTeam].aConc += m.homeScore; teams[m.awayTeam].aGames++;
+            });
+            teamStats = {};
+            for (let t in teams) {
+                const data = teams[t]; const totalGames = (data.hGames + data.aGames) || 1;
+                const avgScored = (data.hGoals + data.aGoals) / totalGames; const avgConc = (data.hConc + data.aConc) / totalGames;
+                const leagueAvgGoals = (leagueHomeAvg + leagueAwayAvg) / 2;
+                teamStats[t] = { attack: (avgScored / leagueAvgGoals) || 1, defense: (avgConc / leagueAvgGoals) || 1, homeAdv: 1.05, avgScored: avgScored, avgConceded: avgConc, totalGames: totalGames };
+            }
+        }
+
+        function calculateLeagueInsights() {
+            const teamNames = Object.keys(teamStats);
+            const totalGoals = globalMatches.reduce((a,b) => a + b.homeScore + b.awayScore, 0);
+            document.getElementById('leagueAvgGoals').innerText = (totalGoals / globalMatches.length).toFixed(2);
+            document.getElementById('totalMatches').innerText = globalMatches.length;
+            let bestAttackTeam = teamNames[0], maxAttack = 0, bestDefenseTeam = teamNames[0], minDefense = 999;
+            teamNames.forEach(t => { const s = teamStats[t]; if (s.avgScored > maxAttack) { maxAttack = s.avgScored; bestAttackTeam = t; } if (s.avgConceded < minDefense) { minDefense = s.avgConceded; bestDefenseTeam = t; } });
+            document.getElementById('bestAttack').innerText = `${bestAttackTeam} (${maxAttack.toFixed(2)})`;
+            document.getElementById('bestDefense').innerText = `${bestDefenseTeam} (${minDefense.toFixed(2)})`;
+        }
+
+        function getSpecificTeamStats(team) {
+            const matches = globalMatches.filter(m => m.homeTeam === team || m.awayTeam === team); if (matches.length === 0) return null;
+            let scored = 0, conceded = 0, wins = 0;
+            matches.forEach(m => { if (m.homeTeam === team) { scored += m.homeScore; conceded += m.awayScore; if (m.homeScore > m.awayScore) wins++; } else { scored += m.awayScore; conceded += m.homeScore; if (m.awayScore > m.homeScore) wins++; } });
+            return { played: matches.length, winRate: ((wins / matches.length) * 100).toFixed(1) + "%", avgScored: (scored / matches.length).toFixed(2), avgConc: (conceded / matches.length).toFixed(2) };
+        }
+
+        function calculateSpecificTeamInsights(home, away) {
+            document.getElementById('specificTeamInsights').classList.remove('hidden');
+            const h = getSpecificTeamStats(home);
+            document.getElementById('homeStatsName').innerText = home; document.getElementById('homeMatches').innerText = h ? h.played : 0; document.getElementById('homeWinRate').innerText = h ? h.winRate : "-"; document.getElementById('homeAvgScored').innerText = h ? h.avgScored : "-"; document.getElementById('homeAvgConc').innerText = h ? h.avgConc : "-";
+            const a = getSpecificTeamStats(away);
+            document.getElementById('awayStatsName').innerText = away; document.getElementById('awayMatches').innerText = a ? a.played : 0; document.getElementById('awayWinRate').innerText = a ? a.winRate : "-"; document.getElementById('awayAvgScored').innerText = a ? a.avgScored : "-"; document.getElementById('awayAvgConc').innerText = a ? a.avgConc : "-";
+        }
+
+        function calculateMatchupInsights(home, away) {
+            const div = document.getElementById('matchupInsights'); const summary = document.getElementById('h2hSummary');
+            document.getElementById('h2hTeams').innerText = `${home} vs ${away}`;
+            const h2h = globalMatches.filter(m => (m.homeTeam === home && m.awayTeam === away) || (m.homeTeam === away && m.awayTeam === home));
+            if (h2h.length === 0) { div.classList.add('hidden'); return; }
+            div.classList.remove('hidden');
+            let homeWins = 0, awayWins = 0, draws = 0, totalGoals = 0;
+            h2h.forEach(m => { totalGoals += m.homeScore + m.awayScore; if (m.homeTeam === home) { if (m.homeScore > m.awayScore) homeWins++; else if (m.awayScore > m.homeScore) awayWins++; else draws++; } else { if (m.awayScore > m.homeScore) homeWins++; else if (m.homeScore > m.awayScore) awayWins++; else draws++; } });
+            summary.innerHTML = `<b>History:</b> ${homeWins} Wins, ${draws} Draws, ${awayWins} Losses<br><b>Average Goals:</b> ${(totalGoals / h2h.length).toFixed(2)} per match<br><b>Total Meetings:</b> ${h2h.length}`;
+        }
+
+        function populateDropdowns() {
+            const homeSel = document.getElementById('homeTeamSelect'); const awaySel = document.getElementById('awayTeamSelect');
+            homeSel.innerHTML = ""; awaySel.innerHTML = "";
+            Object.keys(teamStats).sort().forEach(t => { const o1 = document.createElement('option'); o1.value = t; o1.text = t; homeSel.add(o1); const o2 = document.createElement('option'); o2.value = t; o2.text = t; awaySel.add(o2); });
+        }
+
+        function runPrediction() {
+            const homeTeam = document.getElementById('homeTeamSelect').value; const awayTeam = document.getElementById('awayTeamSelect').value;
+            if (homeTeam === awayTeam) { alert("Please select two different teams."); return; }
+            lastSelectedHomeTeam = homeTeam; lastSelectedAwayTeam = awayTeam;
+            calculateSpecificTeamInsights(homeTeam, awayTeam); calculateMatchupInsights(homeTeam, awayTeam);
+            const hStats = teamStats[homeTeam]; const aStats = teamStats[awayTeam];
+            const leagueHomeAvg = globalMatches.reduce((a, b) => a + b.homeScore, 0) / globalMatches.length;
+            const leagueAwayAvg = globalMatches.reduce((a, b) => a + b.awayScore, 0) / globalMatches.length;
+            const lambdaHome = hStats.attack * aStats.defense * leagueHomeAvg * hStats.homeAdv;
+            const lambdaAway = aStats.attack * hStats.defense * leagueAwayAvg;
+            let homeWins = 0, draws = 0, awayWins = 0, over25Count = 0, over35Count = 0, bttsCount = 0, over15Count = 0;
+            const iterations = 100000; const scoreCounts = {};
+            for (let i = 0; i < iterations; i++) {
+                const hGoals = getPoisson(lambdaHome); const aGoals = getPoisson(lambdaAway);
+                if (hGoals > aGoals) homeWins++; else if (aGoals > hGoals) awayWins++; else draws++;
+                const scoreKey = `${hGoals}-${aGoals}`; scoreCounts[scoreKey] = (scoreCounts[scoreKey] || 0) + 1;
+                if ((hGoals + aGoals) > 1.5) over15Count++; if ((hGoals + aGoals) > 2) over25Count++; if ((hGoals + aGoals) > 3) over35Count++; if (hGoals > 0 && aGoals > 0) bttsCount++;
+            }
+            let likelyScore = "0-0", maxFreq = 0;
+            for (let s in scoreCounts) { if (scoreCounts[s] > maxFreq) { maxFreq = scoreCounts[s]; likelyScore = s; } }
+            const over25Prob = (over25Count / iterations) * 100; const over35Prob = (over35Count / iterations) * 100;
+            const bttsProb = (bttsCount / iterations) * 100; const over15Prob = (over15Count / iterations) * 100;
+            document.getElementById('homeProb').innerText = ((homeWins / iterations) * 100).toFixed(1) + "%";
+            document.getElementById('drawProb').innerText = ((draws / iterations) * 100).toFixed(1) + "%";
+            document.getElementById('awayProb').innerText = ((awayWins / iterations) * 100).toFixed(1) + "%";
+            document.getElementById('homeXg').innerText = lambdaHome.toFixed(2); document.getElementById('awayXg').innerText = lambdaAway.toFixed(2);
+            document.getElementById('likelyScore').innerText = `${likelyScore} (${((maxFreq/iterations)*100).toFixed(1)}%)`;
+            document.getElementById('over25Prob').innerText = over25Prob.toFixed(1) + "%"; document.getElementById('over35Prob').innerText = over35Prob.toFixed(1) + "%";
+            document.getElementById('bttsProb').innerText = bttsProb.toFixed(1) + "%";
+            document.getElementById('predictionResults').classList.remove('hidden'); document.getElementById('exportPredictionBtn').disabled = false;
+            lastPredictionData = { homeTeam, awayTeam, homeWinProb: ((homeWins / iterations) * 100), drawProb: ((draws / iterations) * 100), awayWinProb: ((awayWins / iterations) * 100), homeXg: lambdaHome, awayXg: lambdaAway, likelyScore, likelyScoreProb: ((maxFreq/iterations)*100), over15Prob, over25Prob, over35Prob, bttsProb };
+            runDeviationAnalysis(homeTeam, awayTeam); runZScoreAnalysis(homeTeam, awayTeam);
+        }
+
+        function getPoisson(lambda) { const L = Math.exp(-lambda); let k = 0, p = 1; do { k++; p *= Math.random(); } while (p > L); return k - 1; }
+
+        function downloadCSV() {
+            if (globalMatches.length === 0) return;
+            let csvContent = "data:text/csv;charset=utf-8,Date,Home Team,Away Team,Home Score,Away Score\n";
+            globalMatches.forEach(row => { csvContent += `"${row.date}","${row.homeTeam}","${row.awayTeam}",${row.homeScore},${row.awayScore}\n`; });
+            const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", "techmari_processed_data.csv");
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+
+        function probToOdds(probPercent) { const d = probPercent / 100; if (d <= 0) return "-"; return (1 / d).toFixed(2); }
+
+        function exportPredictionCSV() {
+            if (!lastPredictionData || !lastDeviationData) { alert("Please run a prediction first."); return; }
+            const pred = lastPredictionData; const dev = lastDeviationData;
+            let lastH2H = "N/A"; if (dev.home && dev.home.lastH2H) lastH2H = dev.home.lastH2H; else if (dev.away && dev.away.lastH2H) lastH2H = dev.away.lastH2H;
+            const predictedScore = "'" + (pred.likelyScore || '');
+            const model15Odds = probToOdds(pred.over15Prob); const modelBttsOdds = probToOdds(pred.bttsProb);
+            const o25Prob = pred.over25Prob.toFixed(1) + "%"; const o35Prob = pred.over35Prob.toFixed(1) + "%";
+            const bttsConfidence = getConfidence(pred.bttsProb, 'btts'); const o15Confidence = getConfidence(pred.over15Prob, 'over15');
+            const bttsProb = pred.bttsProb.toFixed(1) + "%";
+            let regressionSignal = "Neutral";
+            if (dev.combinedSignal === 'strong-over') regressionSignal = "Strong Over";
+            else if (dev.combinedSignal === 'strong-under') regressionSignal = "Strong Under";
+            else { if ((dev.home && dev.home.signal === 'up') || (dev.away && dev.away.signal === 'up')) regressionSignal = "Mixed (Over Lean)"; else if ((dev.home && dev.home.signal === 'down') || (dev.away && dev.away.signal === 'down')) regressionSignal = "Mixed (Under Lean)"; }
+            let zScoreSignal = "Neutral"; if (lastZScoreData) zScoreSignal = lastZScoreData.combinedSignalLabel || "Neutral";
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Team A,Team B,Last H2H,Predicted Score,Model 1.5 Odds,Model BTTS Odds,O2.5 Prob,O3.5 Prob,BTTS Confidence,O1.5 Confidence,BTTS Prob,Regression Overall Signal,Z-Score Signal\n";
+            csvContent += `"${pred.homeTeam}","${pred.awayTeam}","${lastH2H}","${predictedScore}",${model15Odds},${modelBttsOdds},"${o25Prob}","${o35Prob}",${bttsConfidence},${o15Confidence},"${bttsProb}",${regressionSignal},${zScoreSignal}\n`;
+            const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent));
+            link.setAttribute("download", `techmari_prediction_${pred.homeTeam}_vs_${pred.awayTeam}_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+
+        function calculateHighProbabilityTeams() {
+            const teamOver15Stats = {}; const teamBTTSStats = {};
+            globalMatches.forEach(m => {
+                const isOver15 = (m.homeScore + m.awayScore) > 1.5 ? 1 : 0; const isBTTS = (m.homeScore > 0 && m.awayScore > 0) ? 1 : 0;
+                [m.homeTeam, m.awayTeam].forEach(team => {
+                    if (!teamOver15Stats[team]) { teamOver15Stats[team] = { over15: 0, total: 0 }; teamBTTSStats[team] = { btts: 0, total: 0 }; }
+                });
+                teamOver15Stats[m.homeTeam].over15 += isOver15; teamOver15Stats[m.homeTeam].total++; teamBTTSStats[m.homeTeam].btts += isBTTS; teamBTTSStats[m.homeTeam].total++;
+                teamOver15Stats[m.awayTeam].over15 += isOver15; teamOver15Stats[m.awayTeam].total++; teamBTTSStats[m.awayTeam].btts += isBTTS; teamBTTSStats[m.awayTeam].total++;
+            });
+            renderHighProbabilityTeams(
+                Object.entries(teamOver15Stats).map(([team, data]) => ({ team, probability: (data.over15 / data.total) * 100, matches: data.total })).filter(t => t.matches >= 3).sort((a, b) => b.probability - a.probability).slice(0, 10),
+                Object.entries(teamBTTSStats).map(([team, data]) => ({ team, probability: (data.btts / data.total) * 100, matches: data.total })).filter(t => t.matches >= 3).sort((a, b) => b.probability - a.probability).slice(0, 10)
+            );
+        }
+
+        function renderHighProbabilityTeams(over15Teams, bttsTeams) {
+            const over15Container = document.getElementById('over15TeamsList');
+            if (over15Teams.length === 0) { over15Container.innerHTML = '<div class="no-data-message">Insufficient data</div>'; }
+            else { const maxP = over15Teams[0].probability; over15Container.innerHTML = over15Teams.map((t, idx) => { const isTop3 = idx < 3; return `<div class="team-prob-row ${isTop3 ? 'top-3' : ''}"><div style="flex: 1;"><div class="team-prob-name">${idx + 1}. ${t.team}${isTop3 ? '<span class="highlight-badge">TOP</span>' : ''}</div><div class="prob-bar-container"><div class="prob-bar over15" style="width: ${(t.probability / maxP) * 100}%"></div></div></div><div class="team-prob-value ${t.probability >= 75 ? 'very-high' : 'high'}">${t.probability.toFixed(1)}%</div></div>`; }).join(''); }
+            const bttsContainer = document.getElementById('bttsTeamsList');
+            if (bttsTeams.length === 0) { bttsContainer.innerHTML = '<div class="no-data-message">Insufficient data</div>'; }
+            else { const maxP = bttsTeams[0].probability; bttsContainer.innerHTML = bttsTeams.map((t, idx) => { const isTop3 = idx < 3; return `<div class="team-prob-row ${isTop3 ? 'top-3 btts' : ''}"><div style="flex: 1;"><div class="team-prob-name">${idx + 1}. ${t.team}${isTop3 ? '<span class="highlight-badge">TOP</span>' : ''}</div><div class="prob-bar-container"><div class="prob-bar btts" style="width: ${(t.probability / maxP) * 100}%"></div></div></div><div class="team-prob-value ${t.probability >= 60 ? 'btts-very-high' : 'btts-high'}">${t.probability.toFixed(1)}%</div></div>`; }).join(''); }
+        }
+
+        function calculateAttackWeakDefenseTeams() {
+            const awdTeams = [];
+            for (let team in teamStats) { const s = teamStats[team]; if (s.attack > 1.0 && s.defense > 1.0 && s.totalGames >= 3) awdTeams.push({ team, attack: s.attack, defense: s.defense, avgScored: s.avgScored, avgConceded: s.avgConceded, totalGames: s.totalGames, combinedScore: s.attack + s.defense }); }
+            awdTeams.sort((a, b) => b.combinedScore - a.combinedScore); renderAttackWeakDefenseTeams(awdTeams.slice(0, 10));
+        }
+
+        function renderAttackWeakDefenseTeams(teams) {
+            const container = document.getElementById('attackWeakDefenseContent');
+            if (teams.length === 0) { container.innerHTML = '<div class="no-data-message">No teams with strong attack and weak defense found.</div>'; return; }
+            const maxA = Math.max(...teams.map(t => t.attack)); const maxD = Math.max(...teams.map(t => t.defense));
+            container.innerHTML = teams.map((t, idx) => { const isTop = idx < 3; return `<div class="awd-team-card ${isTop ? 'top-tier' : ''}"><div class="awd-team-header"><span class="awd-team-name">${idx + 1}. ${t.team}${isTop ? '<span class="highlight-badge">HOT</span>' : ''}</span><span class="awd-score-badge ${isTop ? 'hot' : ''}">Score: ${t.combinedScore.toFixed(2)}</span></div><div class="awd-stats-row"><div class="awd-stat-item"><div class="awd-stat-label">Attack</div><div class="awd-stat-value good">${t.attack.toFixed(2)}</div></div><div class="awd-stat-item"><div class="awd-stat-label">Defense</div><div class="awd-stat-value bad">${t.defense.toFixed(2)}</div></div><div class="awd-stat-item"><div class="awd-stat-label">Avg Scored</div><div class="awd-stat-value purple">${t.avgScored.toFixed(2)}</div></div><div class="awd-stat-item"><div class="awd-stat-label">Avg Conceded</div><div class="awd-stat-value bad">${t.avgConceded.toFixed(2)}</div></div></div><div class="awd-meter"><span class="awd-meter-label">Attack Power</span><div class="awd-meter-bar"><div class="awd-meter-fill attack" style="width: ${(t.attack / maxA) * 100}%"></div></div></div><div class="awd-meter"><span class="awd-meter-label">Defensive Leak</span><div class="awd-meter-bar"><div class="awd-meter-fill defense" style="width: ${(t.defense / maxD) * 100}%"></div></div></div></div>`; }).join('');
+        }
+
+        function setDeviationPeriod(period) {
+            currentDeviationPeriod = period;
+            document.querySelectorAll('.period-btn').forEach(btn => { btn.classList.remove('active'); if (btn.dataset.period === period) btn.classList.add('active'); });
+            if (lastSelectedHomeTeam && lastSelectedAwayTeam) runDeviationAnalysis(lastSelectedHomeTeam, lastSelectedAwayTeam);
+        }
+
+        function runDeviationAnalysis(homeTeam, awayTeam) {
+            homeTeam = homeTeam || lastSelectedHomeTeam; awayTeam = awayTeam || lastSelectedAwayTeam; if (!homeTeam || !awayTeam) return;
+            document.getElementById('deviationResults').classList.remove('hidden');
+            document.getElementById('devHomeTeamName').innerText = homeTeam; document.getElementById('devAwayTeamName').innerText = awayTeam;
+            let homeMatches, awayMatches, h2hMatches = getH2HMatches(homeTeam, awayTeam);
+            switch(currentDeviationPeriod) { case 'last10': homeMatches = getTeamLastNMatches(homeTeam, 10); awayMatches = getTeamLastNMatches(awayTeam, 10); break; case 'h2h': homeMatches = getAllTeamMatches(homeTeam); awayMatches = getAllTeamMatches(awayTeam); break; default: homeMatches = getAllTeamMatches(homeTeam); awayMatches = getAllTeamMatches(awayTeam); }
+            const homeDeviation = calculateTeamDeviation(homeTeam, homeMatches, h2hMatches, awayTeam);
+            const awayDeviation = calculateTeamDeviation(awayTeam, awayMatches, h2hMatches, homeTeam);
+            renderDeviationTeamCard('devHomeTeamContent', homeDeviation); renderDeviationTeamCard('devAwayTeamContent', awayDeviation);
+            renderCombinedSignal(homeDeviation, awayDeviation);
+            lastDeviationData = { home: homeDeviation, away: awayDeviation, combinedSignal: (homeDeviation.signal === 'up' && awayDeviation.signal === 'up') ? 'strong-over' : (homeDeviation.signal === 'down' && awayDeviation.signal === 'down') ? 'strong-under' : 'neutral' };
+            runStrongBetChecklist();
+        }
+
+        function getAllTeamMatches(team) { return globalMatches.filter(m => m.homeTeam === team || m.awayTeam === team); }
+        function getTeamLastNMatches(team, n) { return globalMatches.filter(m => m.homeTeam === team || m.awayTeam === team).slice(-n); }
+        function getH2HMatches(teamA, teamB) { return globalMatches.filter(m => (m.homeTeam === teamA && m.awayTeam === teamB) || (m.homeTeam === teamB && m.awayTeam === teamA)); }
+
+        function calculateTeamDeviation(team, teamMatches, h2hMatches, opponent) {
+            if (teamMatches.length === 0) return { error: true, message: "No matches found" };
+            let totalGoals = 0; teamMatches.forEach(m => { totalGoals += m.homeTeam === team ? m.homeScore : m.awayScore; });
+            const meanGoals = totalGoals / teamMatches.length;
+            const last3Matches = teamMatches.slice(-3); let last3Goals = 0;
+            last3Matches.forEach(m => { last3Goals += m.homeTeam === team ? m.homeScore : m.awayScore; });
+            const last3Avg = last3Matches.length > 0 ? last3Goals / last3Matches.length : 0;
+            let lastH2H = null, lastH2HGoals = 0;
+            if (h2hMatches.length > 0) { const lm = h2hMatches[h2hMatches.length - 1]; if (lm.homeTeam === team) { lastH2HGoals = lm.homeScore; lastH2H = `${lm.homeScore}-${lm.awayScore}`; } else { lastH2HGoals = lm.awayScore; lastH2H = `${lm.awayScore}-${lm.homeScore}`; } }
+            let signal = 'neutral', signalText = '', deviation = 0;
+            if (meanGoals > 0) deviation = ((last3Avg - meanGoals) / meanGoals) * 100;
+            if (deviation < -15) { signal = 'up'; signalText = `Last 3 avg (${last3Avg.toFixed(1)}) is ${Math.abs(deviation).toFixed(0)}% below mean (${meanGoals.toFixed(1)}). REGRESSION UP - likely to score more.`; }
+            else if (deviation > 15) { signal = 'down'; signalText = `Last 3 avg (${last3Avg.toFixed(1)}) is ${deviation.toFixed(0)}% above mean (${meanGoals.toFixed(1)}). REGRESSION DOWN - likely to score less.`; }
+            else { signal = 'neutral'; signalText = `Last 3 avg (${last3Avg.toFixed(1)}) is close to mean (${meanGoals.toFixed(1)}). No strong regression signal.`; }
+            let h2hAnalysis = '';
+            if (lastH2H !== null) { const h2hVsMean = lastH2HGoals - meanGoals; if (h2hVsMean < -1) h2hAnalysis = `Last H2H: ${lastH2H} (below mean - supports OVER)`; else if (h2hVsMean > 1) h2hAnalysis = `Last H2H: ${lastH2H} (above mean - supports UNDER)`; else h2hAnalysis = `Last H2H: ${lastH2H} (around mean)`; }
+            return { team, totalMatches: teamMatches.length, meanGoals, last3Avg, deviation, signal, signalText, lastH2H, lastH2HGoals, h2hAnalysis, h2hMatches: h2hMatches.length };
+        }
+
+        function renderDeviationTeamCard(containerId, data) {
+            const container = document.getElementById(containerId);
+            if (data.error) { container.innerHTML = `<div class="no-data-message">${data.message}</div>`; return; }
+            const last3Class = data.last3Avg < data.meanGoals ? 'highlight-red' : data.last3Avg > data.meanGoals ? 'highlight-green' : '';
+            const arrow = data.deviation < -5 ? '↓' : data.deviation > 5 ? '↑' : '→'; const arrowClass = data.deviation < -5 ? 'down' : data.deviation > 5 ? 'up' : '';
+            const meterPercent = Math.min(Math.max(50 + (data.deviation * 2), 0), 100);
+            let html = `<div class="deviation-stat-block"><div class="deviation-stat-label">Season Mean (Goals Scored)</div><div class="deviation-stat-value">${data.meanGoals.toFixed(2)} goals/game (${data.totalMatches} matches)</div></div>`;
+            html += `<div class="deviation-stat-block"><div class="deviation-stat-label">Last 3 Games Average</div><div class="deviation-stat-value"><span class="${last3Class}">${data.last3Avg.toFixed(2)} goals/game</span><span class="deviation-comparison"><span class="deviation-arrow ${arrowClass}">${arrow}</span>${data.deviation > 0 ? '+' : ''}${data.deviation.toFixed(1)}% vs mean</span></div><div class="deviation-meter"><div class="deviation-meter-bar"><div class="deviation-meter-center"></div><div class="deviation-meter-fill ${data.deviation < 0 ? 'below' : 'above'}" style="width: ${Math.abs(meterPercent - 50)}%; ${data.deviation < 0 ? 'right: 50%' : 'left: 50%'}"></div></div></div><div class="deviation-meter-labels"><span>Below Mean</span><span>Mean</span><span>Above Mean</span></div></div>`;
+            if (data.lastH2H !== null) html += `<div class="last-h2h-box"><div class="last-h2h-title">Last H2H Result</div><div class="last-h2h-score">${data.lastH2H}</div><div class="last-h2h-analysis">${data.h2hAnalysis}</div></div>`;
+            else if (data.h2hMatches === 0) html += `<div class="last-h2h-box"><div class="last-h2h-title">H2H History</div><div class="last-h2h-analysis" style="color: #6c757d;">No previous meetings found</div></div>`;
+            const sBC = data.signal === 'up' ? 'regression-up' : data.signal === 'down' ? 'regression-down' : 'neutral'; const sTC = data.signal === 'up' ? 'up' : data.signal === 'down' ? 'down' : 'neutral';
+            html += `<div class="deviation-signal-box ${sBC}"><div class="signal-title ${sTC}">${data.signal === 'up' ? 'REGRESSION UP' : data.signal === 'down' ? 'REGRESSION DOWN' : 'NEUTRAL'}</div><div class="signal-text">${data.signalText}</div></div>`;
+            container.innerHTML = html;
+        }
+
+        function renderCombinedSignal(homeData, awayData) {
+            const box = document.getElementById('combinedSignalBox'); const value = document.getElementById('combinedSignalValue'); const desc = document.getElementById('combinedSignalDesc'); const rec = document.getElementById('combinedSignalRec');
+            box.classList.remove('strong-over', 'strong-under', 'caution'); rec.classList.remove('over', 'under', 'caution');
+            const hs = homeData.signal; const as = awayData.signal; let cs, cd, r;
+            if (hs === 'up' && as === 'up') { cs = 'STRONG OVER SIGNAL'; cd = 'Both teams regressing UP - Recent form below average, likely to score more'; r = 'OVER 2.5 Recommended'; box.classList.add('strong-over'); rec.classList.add('over'); }
+            else if (hs === 'down' && as === 'down') { cs = 'STRONG UNDER SIGNAL'; cd = 'Both teams regressing DOWN - Recent form above average, likely to score less'; r = 'UNDER 2.5 Recommended'; box.classList.add('strong-under'); rec.classList.add('under'); }
+            else if (hs === 'up' || as === 'up') { cs = 'MIXED SIGNALS'; cd = `One team regressing UP (${hs === 'up' ? homeData.team : awayData.team})`; r = 'Proceed with Caution'; box.classList.add('caution'); rec.classList.add('caution'); }
+            else if (hs === 'down' || as === 'down') { cs = 'MIXED SIGNALS'; cd = `One team regressing DOWN (${hs === 'down' ? homeData.team : awayData.team})`; r = 'Proceed with Caution'; box.classList.add('caution'); rec.classList.add('caution'); }
+            else { cs = 'NEUTRAL'; cd = 'Both teams performing close to their averages'; r = 'No Strong Signal'; box.classList.add('caution'); rec.classList.add('caution'); }
+            value.innerText = cs; desc.innerText = cd; rec.innerText = r;
+        }
+
+        function getConfidence(prob, type) {
+            if (type === 'btts') { if (prob >= 65) return 'High'; if (prob >= 50) return 'Medium'; return 'Low'; }
+            else if (type === 'over15') { if (prob >= 80) return 'High'; if (prob >= 65) return 'Medium'; return 'Low'; }
+            return 'Low';
+        }
+
+        function runStrongBetChecklist() {
+            if (!lastPredictionData || !lastDeviationData) return;
+            const pred = lastPredictionData; const dev = lastDeviationData;
+            const checklist = [
+                { text: 'BTTS Prob between 50-57%?', value: `${pred.bttsProb.toFixed(1)}%`, checked: pred.bttsProb >= 50 && pred.bttsProb <= 57 },
+                { text: 'O2.5 Prob >= 68%?', value: `${pred.over25Prob.toFixed(1)}%`, checked: pred.over25Prob >= 68 },
+                { text: 'BTTS Confidence Medium (not High)?', value: getConfidence(pred.bttsProb, 'btts'), checked: getConfidence(pred.bttsProb, 'btts') === 'Medium' },
+                { text: 'Regression Signal: Strong Over?', value: dev.combinedSignal === 'strong-over' ? 'YES' : 'NO', checked: dev.combinedSignal === 'strong-over' },
+                { text: 'O1.5 Confidence: High?', value: `${getConfidence(pred.over15Prob, 'over15')} (${pred.over15Prob.toFixed(1)}%)`, checked: getConfidence(pred.over15Prob, 'over15') === 'High' }
+            ];
+            const container = document.getElementById('checklistItems');
+            container.innerHTML = checklist.map(item => `<div class="checklist-item ${item.checked ? 'checked' : 'unchecked'}"><span class="checklist-icon">${item.checked ? '✅' : '❌'}</span><span class="checklist-text">${item.text}</span><span class="checklist-value ${item.checked ? 'pass' : 'fail'}">${item.value}</span></div>`).join('');
+            const yesCount = checklist.filter(c => c.checked).length;
+            const verdict = document.getElementById('betVerdict'); const verdictScore = document.getElementById('verdictScore'); const verdictMessage = document.getElementById('verdictMessage');
+            verdict.classList.remove('strong', 'moderate', 'weak');
+            if (yesCount >= 5) { verdict.classList.add('strong'); verdictScore.innerText = `${yesCount}/5 YES`; verdictMessage.innerText = 'STRONG BET - High confidence selection'; }
+            else if (yesCount >= 3) { verdict.classList.add('moderate'); verdictScore.innerText = `${yesCount}/5 YES`; verdictMessage.innerText = 'MODERATE BET - Consider with caution'; }
+            else { verdict.classList.add('weak'); verdictScore.innerText = `${yesCount}/5 YES`; verdictMessage.innerText = 'WEAK BET - Not recommended'; }
+        }
+
+        // Z-SCORE ANALYSIS (Independent Section)
+        function runZScoreAnalysis(homeTeam, awayTeam) {
+            homeTeam = homeTeam || lastSelectedHomeTeam; awayTeam = awayTeam || lastSelectedAwayTeam; if (!homeTeam || !awayTeam) return;
+            document.getElementById('zScoreResults').classList.remove('hidden');
+            document.getElementById('zscoreHomeTeamName').innerText = homeTeam; document.getElementById('zscoreAwayTeamName').innerText = awayTeam;
+            const homeZScore = calculateTeamZScore(homeTeam); const awayZScore = calculateTeamZScore(awayTeam);
+            renderZScoreTeamCard('zscoreHomeContent', homeZScore); renderZScoreTeamCard('zscoreAwayContent', awayZScore);
+            renderZScoreCombinedSignal(homeZScore, awayZScore);
+            lastZScoreData = { home: homeZScore, away: awayZScore, combinedSignal: determineZScoreCombinedSignal(homeZScore, awayZScore), combinedSignalLabel: '' };
+            lastZScoreData.combinedSignalLabel = getZScoreCombinedLabel(lastZScoreData.combinedSignal);
+        }
+
+        function calculateTeamZScore(team) {
+            const matches = globalMatches.filter(m => m.homeTeam === team || m.awayTeam === team);
+            if (matches.length < 3) return { error: true, message: "Insufficient data (minimum 3 matches required)", team: team };
+            const goalsPerMatch = matches.map(m => m.homeTeam === team ? m.homeScore : m.awayScore);
+            const sum = goalsPerMatch.reduce((a, b) => a + b, 0); const mean = sum / goalsPerMatch.length;
+            const variance = goalsPerMatch.map(g => Math.pow(g - mean, 2)).reduce((a, b) => a + b, 0) / goalsPerMatch.length;
+            const stdDev = Math.sqrt(variance);
+            const last3 = goalsPerMatch.slice(-3); const last3Avg = last3.reduce((a, b) => a + b, 0) / last3.length;
+            let zScore = stdDev > 0 ? (last3Avg - mean) / stdDev : 0;
+            let signal = 'neutral', signalLabel = 'Normal', signalText = '', badgeClass = 'normal';
+            if (zScore < -1.5) { signal = 'up'; signalLabel = 'Strong Underperformance'; signalText = `Z-Score of ${zScore.toFixed(2)} indicates significant underperformance. Recent form is ${Math.abs(zScore).toFixed(1)} standard deviations below the mean. Strong regression UP expected.`; badgeClass = 'extreme-under'; }
+            else if (zScore < -1.0) { signal = 'up'; signalLabel = 'Moderate Underperformance'; signalText = `Z-Score of ${zScore.toFixed(2)} suggests moderate underperformance. Regression UP possible.`; badgeClass = 'moderate-under'; }
+            else if (zScore <= 1.0) { signal = 'neutral'; signalLabel = 'Normal Range'; signalText = `Z-Score of ${zScore.toFixed(2)} is within the normal range. No strong regression signal.`; badgeClass = 'normal'; }
+            else if (zScore <= 1.5) { signal = 'down'; signalLabel = 'Moderate Overperformance'; signalText = `Z-Score of ${zScore.toFixed(2)} suggests moderate overperformance. Regression DOWN possible.`; badgeClass = 'moderate-over'; }
+            else { signal = 'down'; signalLabel = 'Strong Overperformance'; signalText = `Z-Score of ${zScore.toFixed(2)} indicates significant overperformance. Strong regression DOWN expected.`; badgeClass = 'extreme-over'; }
+            return { team, totalMatches: matches.length, mean, stdDev, last3Avg, zScore, signal, signalLabel, signalText, badgeClass, goalsPerMatch };
+        }
+
+        function renderZScoreTeamCard(containerId, data) {
+            const container = document.getElementById(containerId);
+            if (data.error) { container.innerHTML = `<div class="no-data-message">${data.message}</div>`; return; }
+            const zvc = data.zScore < -1.0 ? 'negative' : data.zScore > 1.0 ? 'positive' : 'neutral-val';
+            const mp = Math.min(Math.max(50 + (data.zScore * 15), 5), 95);
+            let html = `<div class="zscore-stat-block"><div class="zscore-stat-label">Z-Score</div><div class="zscore-value ${zvc}">${data.zScore > 0 ? '+' : ''}${data.zScore.toFixed(2)}</div><span class="zscore-badge ${data.badgeClass}">${data.signalLabel}</span></div>`;
+            html += `<div class="zscore-stat-block"><div class="zscore-stat-label">Season Mean (Goals Scored)</div><div class="zscore-stat-value">${data.mean.toFixed(2)} goals/game (${data.totalMatches} matches)</div></div>`;
+            html += `<div class="zscore-stat-block"><div class="zscore-stat-label">Standard Deviation</div><div class="zscore-stat-value">${data.stdDev.toFixed(2)} goals/game</div></div>`;
+            html += `<div class="zscore-stat-block"><div class="zscore-stat-label">Last 3 Games Average</div><div class="zscore-stat-value">${data.last3Avg.toFixed(2)} goals/game</div></div>`;
+            html += `<div class="zscore-bell-container"><div class="zscore-bell-bar"><div class="zscore-bell-marker" style="left: ${mp}%" data-label="Z=${data.zScore > 0 ? '+' : ''}${data.zScore.toFixed(1)}"></div></div><div class="zscore-bell-labels"><span>-3.0</span><span>-1.5</span><span>0</span><span>+1.5</span><span>+3.0</span></div></div>`;
+            const sbc = data.signal === 'up' ? 'signal-up' : data.signal === 'down' ? 'signal-down' : 'signal-neutral'; const stc = data.signal === 'up' ? 'up' : data.signal === 'down' ? 'down' : 'neutral';
+            html += `<div class="zscore-signal-box ${sbc}"><div class="signal-title ${stc}">${data.signal === 'up' ? 'REGRESSION UP' : data.signal === 'down' ? 'REGRESSION DOWN' : 'NEUTRAL'}</div><div class="signal-text">${data.signalText}</div></div>`;
+            container.innerHTML = html;
+        }
+
+        function determineZScoreCombinedSignal(homeData, awayData) {
+            if (homeData.error || awayData.error) return 'neutral';
+            const hs = homeData.signal; const as = awayData.signal;
+            if (hs === 'up' && as === 'up') return 'strong-over'; if (hs === 'down' && as === 'down') return 'strong-under';
+            if (hs === 'up' || as === 'up') return 'mixed-over-lean'; if (hs === 'down' || as === 'down') return 'mixed-under-lean'; return 'neutral';
+        }
+
+        function getZScoreCombinedLabel(signal) { switch(signal) { case 'strong-over': return 'Strong Over'; case 'strong-under': return 'Strong Under'; case 'mixed-over-lean': return 'Mixed (Over Lean)'; case 'mixed-under-lean': return 'Mixed (Under Lean)'; default: return 'Neutral'; } }
+
+        function renderZScoreCombinedSignal(homeData, awayData) {
+            const box = document.getElementById('zscoreCombinedBox'); const value = document.getElementById('zscoreCombinedValue'); const desc = document.getElementById('zscoreCombinedDesc'); const rec = document.getElementById('zscoreCombinedRec');
+            box.classList.remove('zs-strong-over', 'zs-strong-under', 'zs-caution'); rec.classList.remove('over', 'under', 'caution');
+            if (homeData.error || awayData.error) { value.innerText = 'INSUFFICIENT DATA'; desc.innerText = 'Need at least 3 matches per team'; rec.innerText = 'Cannot analyze'; rec.classList.add('caution'); box.classList.add('zs-caution'); return; }
+            const cs = determineZScoreCombinedSignal(homeData, awayData); let ct, cd, r;
+            if (cs === 'strong-over') { ct = 'STRONG OVER SIGNAL'; cd = `Both teams have negative Z-Scores (${homeData.team}: ${homeData.zScore > 0 ? '+' : ''}${homeData.zScore.toFixed(2)}, ${awayData.team}: ${awayData.zScore > 0 ? '+' : ''}${awayData.zScore.toFixed(2)}) - Strong regression UP expected`; r = 'OVER 2.5 Recommended'; box.classList.add('zs-strong-over'); rec.classList.add('over'); }
+            else if (cs === 'strong-under') { ct = 'STRONG UNDER SIGNAL'; cd = `Both teams have positive Z-Scores (${homeData.team}: ${homeData.zScore > 0 ? '+' : ''}${homeData.zScore.toFixed(2)}, ${awayData.team}: ${awayData.zScore > 0 ? '+' : ''}${awayData.zScore.toFixed(2)}) - Strong regression DOWN expected`; r = 'UNDER 2.5 Recommended'; box.classList.add('zs-strong-under'); rec.classList.add('under'); }
+            else if (cs === 'mixed-over-lean') { ct = 'MIXED SIGNALS (OVER LEAN)'; cd = `${homeData.signal === 'up' ? homeData.team : awayData.team} shows underperformance. Partial OVER signal.`; r = 'Proceed with Caution'; box.classList.add('zs-caution'); rec.classList.add('caution'); }
+            else if (cs === 'mixed-under-lean') { ct = 'MIXED SIGNALS (UNDER LEAN)'; cd = `${homeData.signal === 'down' ? homeData.team : awayData.team} shows overperformance. Partial UNDER signal.`; r = 'Proceed with Caution'; box.classList.add('zs-caution'); rec.classList.add('caution'); }
+            else { ct = 'NEUTRAL'; cd = `Both teams within normal Z-Score range (${homeData.team}: ${homeData.zScore > 0 ? '+' : ''}${homeData.zScore.toFixed(2)}, ${awayData.team}: ${awayData.zScore > 0 ? '+' : ''}${awayData.zScore.toFixed(2)}). No statistically significant deviation.`; r = 'No Strong Signal'; box.classList.add('zs-caution'); rec.classList.add('caution'); }
+            value.innerText = ct; desc.innerText = cd; rec.innerText = r;
+        }
+    </script>
+</body>
+</html>
