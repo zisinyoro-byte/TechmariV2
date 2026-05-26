@@ -264,6 +264,24 @@
         .zscore-combined-rec.over { background: #28a745; color: white; }
         .zscore-combined-rec.under { background: #dc3545; color: white; }
         .zscore-combined-rec.caution { background: #fd7e14; color: white; }
+        /* Sweet Spot Styles */
+        .sweet-spot-badge { display: inline-block; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 14px; margin-top: 12px; letter-spacing: 0.5px; }
+        .sweet-spot-badge.hit { background: linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FFD700 100%); color: #1a1a1a; animation: sweetSpotPulse 2s infinite; box-shadow: 0 0 15px rgba(255, 215, 0, 0.5); }
+        .sweet-spot-badge.miss { background: linear-gradient(135deg, #6c757d 0%, #adb5bd 100%); color: white; }
+        @keyframes sweetSpotPulse { 0%, 100% { box-shadow: 0 0 10px rgba(255, 215, 0, 0.4); } 50% { box-shadow: 0 0 25px rgba(255, 215, 0, 0.8); } }
+        .sweet-spot-banner { margin-top: 15px; padding: 16px; border-radius: 10px; text-align: center; }
+        .sweet-spot-banner.hit { background: linear-gradient(135deg, #FFD700 0%, #FFC107 50%, #FFB300 100%); border: 2px solid #FFD700; animation: sweetSpotPulse 2s infinite; }
+        .sweet-spot-banner.miss { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border: 2px solid #dee2e6; }
+        .sweet-spot-title { font-size: 18px; font-weight: bold; margin-bottom: 6px; }
+        .sweet-spot-banner.hit .sweet-spot-title { color: #1a1a1a; }
+        .sweet-spot-banner.miss .sweet-spot-title { color: #6c757d; }
+        .sweet-spot-detail { font-size: 12px; margin-top: 5px; }
+        .sweet-spot-banner.hit .sweet-spot-detail { color: #5d4e00; }
+        .sweet-spot-banner.miss .sweet-spot-detail { color: #6c757d; }
+        .sweet-spot-criteria-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; text-align: left; }
+        .sweet-spot-criteria-item { font-size: 11px; padding: 4px 8px; border-radius: 4px; display: flex; align-items: center; gap: 5px; }
+        .sweet-spot-criteria-item.pass { background: rgba(40, 167, 69, 0.15); color: #155724; }
+        .sweet-spot-criteria-item.fail { background: rgba(220, 53, 69, 0.1); color: #721c24; }
     </style>
 </head>
 <body>
@@ -325,6 +343,9 @@
                     </div>
                 </div>
                 <div style="margin-top: 15px; text-align: center;">
+                    <div id="sweetSpotBadge" class="sweet-spot-badge miss" style="display:none;">SWEET SPOT: --</div>
+                </div>
+                <div style="margin-top: 15px; text-align: center;">
                     <button id="exportPredictionBtn" onclick="exportPredictionCSV()" class="btn-export" disabled>Export Prediction CSV</button>
                 </div>
             </div>
@@ -333,6 +354,11 @@
             <h3>Strong Bet Checklist</h3>
             <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Automated checklist to identify strong betting opportunities</p>
             <div class="checklist-container" id="checklistContainer">
+                <div id="sweetSpotBanner" class="sweet-spot-banner miss" style="display:none;">
+                    <div class="sweet-spot-title" id="sweetSpotBannerTitle">Sweet Spot: --/6</div>
+                    <div class="sweet-spot-detail" id="sweetSpotBannerDetail"></div>
+                    <div class="sweet-spot-criteria-list" id="sweetSpotCriteriaList"></div>
+                </div>
                 <div id="checklistItems"></div>
                 <div id="betVerdict" class="bet-verdict weak">
                     <div class="verdict-title">VERDICT</div>
@@ -637,7 +663,7 @@
             document.getElementById('bttsProb').innerText = bttsProb.toFixed(1) + "%";
             document.getElementById('predictionResults').classList.remove('hidden'); document.getElementById('exportPredictionBtn').disabled = false;
             lastPredictionData = { homeTeam, awayTeam, homeWinProb: ((homeWins / iterations) * 100), drawProb: ((draws / iterations) * 100), awayWinProb: ((awayWins / iterations) * 100), homeXg: lambdaHome, awayXg: lambdaAway, likelyScore, likelyScoreProb: ((maxFreq/iterations)*100), over15Prob, over25Prob, over35Prob, bttsProb };
-            runDeviationAnalysis(homeTeam, awayTeam); runZScoreAnalysis(homeTeam, awayTeam);
+            runDeviationAnalysis(homeTeam, awayTeam); runZScoreAnalysis(homeTeam, awayTeam); evaluateSweetSpot();
         }
 
         function getPoisson(lambda) { const L = Math.exp(-lambda); let k = 0, p = 1; do { k++; p *= Math.random(); } while (p > L); return k - 1; }
@@ -667,8 +693,9 @@
             else { if ((dev.home && dev.home.signal === 'up') || (dev.away && dev.away.signal === 'up')) regressionSignal = "Mixed (Over Lean)"; else if ((dev.home && dev.home.signal === 'down') || (dev.away && dev.away.signal === 'down')) regressionSignal = "Mixed (Under Lean)"; }
             let zScoreSignal = "Neutral"; if (lastZScoreData) zScoreSignal = lastZScoreData.combinedSignalLabel || "Neutral";
             let csvContent = "data:text/csv;charset=utf-8,";
-            csvContent += "Team A,Team B,Last H2H,Predicted Score,Model 1.5 Odds,Model BTTS Odds,O2.5 Prob,O3.5 Prob,BTTS Confidence,O1.5 Confidence,BTTS Prob,Regression Overall Signal,Z-Score Signal\n";
-            csvContent += `"${pred.homeTeam}","${pred.awayTeam}","${lastH2H}","${predictedScore}",${model15Odds},${modelBttsOdds},"${o25Prob}","${o35Prob}",${bttsConfidence},${o15Confidence},"${bttsProb}",${regressionSignal},${zScoreSignal}\n`;
+            csvContent += "Team A,Team B,Last H2H,Predicted Score,Model 1.5 Odds,Model BTTS Odds,O2.5 Prob,O3.5 Prob,BTTS Confidence,O1.5 Confidence,BTTS Prob,Regression Overall Signal,Z-Score Signal,Sweet Spot\n";
+            let sweetSpot = "NO"; if (lastSweetSpotResult && lastSweetSpotResult.allHit) sweetSpot = "YES";
+            csvContent += `"${pred.homeTeam}","${pred.awayTeam}","${lastH2H}","${predictedScore}",${model15Odds},${modelBttsOdds},"${o25Prob}","${o35Prob}",${bttsConfidence},${o15Confidence},"${bttsProb}",${regressionSignal},${zScoreSignal},${sweetSpot}\n`;
             const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent));
             link.setAttribute("download", `techmari_prediction_${pred.homeTeam}_vs_${pred.awayTeam}_${new Date().toISOString().slice(0,10)}.csv`);
             document.body.appendChild(link); link.click(); document.body.removeChild(link);
@@ -861,6 +888,111 @@
         }
 
         function getZScoreCombinedLabel(signal) { switch(signal) { case 'strong-over': return 'Strong Over'; case 'strong-under': return 'Strong Under'; case 'mixed-over-lean': return 'Mixed (Over Lean)'; case 'mixed-under-lean': return 'Mixed (Under Lean)'; default: return 'Neutral'; } }
+
+        // SWEET SPOT EVALUATION
+        let lastSweetSpotResult = null;
+
+        function evaluateSweetSpot() {
+            if (!lastPredictionData || !lastDeviationData || !lastZScoreData) return;
+            const pred = lastPredictionData;
+            const dev = lastDeviationData;
+            const zs = lastZScoreData;
+
+            // Calculate O1.5 Odds and BTTS Odds
+            const o15Odds = parseFloat(probToOdds(pred.over15Prob));
+            const bttsOdds = parseFloat(probToOdds(pred.bttsProb));
+
+            // Calculate clean sheet probabilities using Poisson P(X=0) = e^(-lambda)
+            const homeCleanSheetProb = (Math.exp(-pred.awayXg)) * 100; // P(away scores 0) = P(home clean sheet)
+            const awayCleanSheetProb = (Math.exp(-pred.homeXg)) * 100; // P(home scores 0) = P(away clean sheet)
+            const noPredictedCleanSheet = homeCleanSheetProb < 35 && awayCleanSheetProb < 35;
+
+            // Determine regression signal label (same logic as CSV export)
+            let regressionSignal = "Neutral";
+            if (dev.combinedSignal === 'strong-over') regressionSignal = "Strong Over";
+            else if (dev.combinedSignal === 'strong-under') regressionSignal = "Strong Under";
+            else {
+                if ((dev.home && dev.home.signal === 'up') || (dev.away && dev.away.signal === 'up')) regressionSignal = "Mixed (Over Lean)";
+                else if ((dev.home && dev.home.signal === 'down') || (dev.away && dev.away.signal === 'down')) regressionSignal = "Mixed (Under Lean)";
+            }
+
+            // Z-Score signal label
+            const zScoreSignal = zs.combinedSignalLabel || "Neutral";
+
+            // Evaluate each criterion
+            const criteria = [
+                {
+                    name: 'O1.5 Odds Range (1.06-1.10)',
+                    value: o15Odds.toFixed(2),
+                    passed: o15Odds >= 1.06 && o15Odds <= 1.10,
+                    failReason: o15Odds < 1.06 ? 'Too low (overconfident)' : o15Odds > 1.10 ? 'Too high (underconfident)' : ''
+                },
+                {
+                    name: 'BTTS Odds Range (1.31-1.40)',
+                    value: bttsOdds.toFixed(2),
+                    passed: bttsOdds >= 1.31 && bttsOdds <= 1.40,
+                    failReason: bttsOdds < 1.31 ? 'Too low (overconfident)' : bttsOdds > 1.40 ? 'Too high (underconfident)' : ''
+                },
+                {
+                    name: 'O2.5 Prob Range (68%-79%)',
+                    value: pred.over25Prob.toFixed(1) + '%',
+                    passed: pred.over25Prob >= 68 && pred.over25Prob <= 79,
+                    failReason: pred.over25Prob < 68 ? 'Below 68%' : pred.over25Prob > 79 ? 'Above 79% (overconfident)' : ''
+                },
+                {
+                    name: 'No Predicted Clean Sheet',
+                    value: `Home CS: ${homeCleanSheetProb.toFixed(1)}% | Away CS: ${awayCleanSheetProb.toFixed(1)}%`,
+                    passed: noPredictedCleanSheet,
+                    failReason: homeCleanSheetProb >= 35 ? `Home CS risk ${homeCleanSheetProb.toFixed(1)}%` : awayCleanSheetProb >= 35 ? `Away CS risk ${awayCleanSheetProb.toFixed(1)}%` : ''
+                },
+                {
+                    name: 'Regression: Mixed (Over Lean)',
+                    value: regressionSignal,
+                    passed: regressionSignal === 'Mixed (Over Lean)',
+                    failReason: regressionSignal !== 'Mixed (Over Lean)' ? `Is: ${regressionSignal}` : ''
+                },
+                {
+                    name: 'Z-Score: Neutral',
+                    value: zScoreSignal,
+                    passed: zScoreSignal === 'Neutral',
+                    failReason: zScoreSignal !== 'Neutral' ? `Is: ${zScoreSignal}` : ''
+                }
+            ];
+
+            const passCount = criteria.filter(c => c.passed).length;
+            const allHit = passCount === 6;
+            const failedCriteria = criteria.filter(c => !c.passed).map(c => c.failReason || c.name);
+
+            lastSweetSpotResult = { criteria, passCount, allHit, failedCriteria, o15Odds, bttsOdds, homeCleanSheetProb, awayCleanSheetProb, regressionSignal, zScoreSignal };
+
+            // Update badge in prediction results
+            const badge = document.getElementById('sweetSpotBadge');
+            badge.style.display = 'inline-block';
+            badge.className = 'sweet-spot-badge ' + (allHit ? 'hit' : 'miss');
+            badge.innerHTML = allHit ? '&#128293; SWEET SPOT HIT' : `Sweet Spot: ${passCount}/6`;
+
+            // Update banner in checklist section
+            const banner = document.getElementById('sweetSpotBanner');
+            banner.style.display = 'block';
+            banner.className = 'sweet-spot-banner ' + (allHit ? 'hit' : 'miss');
+            document.getElementById('sweetSpotBannerTitle').innerHTML = allHit ? '&#128293; SWEET SPOT &mdash; ALL 6 CRITERIA MET' : `Sweet Spot: ${passCount}/6 criteria met`;
+
+            const detailEl = document.getElementById('sweetSpotBannerDetail');
+            if (allHit) {
+                detailEl.innerHTML = `O1.5 Odds: ${o15Odds.toFixed(2)} | BTTS Odds: ${bttsOdds.toFixed(2)} | O2.5: ${pred.over25Prob.toFixed(1)}% | Regression: ${regressionSignal} | Z-Score: ${zScoreSignal}`;
+            } else {
+                detailEl.innerHTML = `Missing: ${failedCriteria.join(', ')}`;
+            }
+
+            // Render criteria breakdown
+            const listEl = document.getElementById('sweetSpotCriteriaList');
+            listEl.innerHTML = criteria.map(c =>
+                `<div class="sweet-spot-criteria-item ${c.passed ? 'pass' : 'fail'}">
+                    <span>${c.passed ? '&#10003;' : '&#10007;'}</span>
+                    <span><strong>${c.name}</strong>: ${c.value}</span>
+                </div>`
+            ).join('');
+        }
 
         function renderZScoreCombinedSignal(homeData, awayData) {
             const box = document.getElementById('zscoreCombinedBox'); const value = document.getElementById('zscoreCombinedValue'); const desc = document.getElementById('zscoreCombinedDesc'); const rec = document.getElementById('zscoreCombinedRec');
