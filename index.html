@@ -329,6 +329,40 @@
         .backtest-match-result.hit { background: #28a745; color: white; }
         .backtest-match-result.miss { background: #dc3545; color: white; }
         .backtest-export-btn { margin-top: 15px; }
+        /* Discovered Sweet Spot Styles */
+        .discovered-ss-banner { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border-radius: 12px; padding: 20px; margin-bottom: 20px; color: white; text-align: center; border: 2px solid #FFD700; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.2); }
+        .discovered-ss-title { font-size: 18px; font-weight: bold; margin-bottom: 5px; color: #FFD700; letter-spacing: 1px; }
+        .discovered-ss-subtitle { font-size: 13px; color: #adb5bd; margin-bottom: 15px; }
+        .discovered-ss-criteria-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; text-align: left; }
+        @media (max-width: 768px) { .discovered-ss-criteria-grid { grid-template-columns: 1fr; } }
+        .discovered-ss-criterion { background: rgba(255, 255, 255, 0.08); border-radius: 6px; padding: 10px 12px; border-left: 3px solid #FFD700; }
+        .discovered-ss-criterion-label { font-size: 10px; text-transform: uppercase; color: #adb5bd; letter-spacing: 0.5px; }
+        .discovered-ss-criterion-value { font-size: 14px; font-weight: bold; color: #FFD700; margin-top: 2px; }
+        .discovered-ss-stats { display: flex; justify-content: center; gap: 30px; margin-top: 15px; }
+        .discovered-ss-stat { text-align: center; }
+        .discovered-ss-stat-value { font-size: 24px; font-weight: bold; }
+        .discovered-ss-stat-value.gold { color: #FFD700; }
+        .discovered-ss-stat-value.green { color: #28a745; }
+        .discovered-ss-stat-label { font-size: 11px; color: #adb5bd; text-transform: uppercase; }
+        .discovered-ss-vs-current { background: rgba(255, 255, 255, 0.05); border-radius: 8px; padding: 12px; margin-top: 15px; border: 1px dashed rgba(255, 215, 0, 0.3); }
+        .discovered-ss-vs-title { font-size: 12px; color: #adb5bd; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .discovered-ss-comparison-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .discovered-ss-comparison-table th { color: #adb5bd; padding: 6px 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 10px; text-transform: uppercase; }
+        .discovered-ss-comparison-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #dee2e6; }
+        .discovered-ss-comparison-table .current { color: #6c757d; }
+        .discovered-ss-comparison-table .discovered { color: #FFD700; font-weight: bold; }
+        .discovered-ss-improvement { color: #28a745; font-weight: bold; }
+        .discovered-ss-worsening { color: #dc3545; font-weight: bold; }
+        .discovered-ss-alt-card { background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%); border-radius: 8px; padding: 15px; margin-bottom: 10px; border: 1px solid #e9ecef; border-left: 4px solid #6c757d; }
+        .discovered-ss-alt-card.best { border-left-color: #FFD700; background: linear-gradient(90deg, #fffdf0 0%, #f8f9fa 100%); }
+        .discovered-ss-alt-card.good { border-left-color: #28a745; }
+        .discovered-ss-alt-header { font-size: 13px; font-weight: bold; color: #34495e; margin-bottom: 6px; }
+        .discovered-ss-alt-detail { font-size: 11px; color: #6c757d; }
+        .discovered-ss-alt-stats { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+        .discovered-ss-alt-stat { text-align: center; }
+        .discovered-ss-alt-stat-value { font-size: 14px; font-weight: bold; color: #495057; }
+        .discovered-ss-alt-stat-value.green { color: #28a745; }
+        .discovered-ss-alt-stat-label { font-size: 9px; text-transform: uppercase; color: #6c757d; }
     </style>
 </head>
 <body>
@@ -543,6 +577,11 @@
                     <div class="backtest-pattern-title">Top Repeating Patterns</div>
                     <p style="font-size:11px; color:#6c757d; margin-bottom: 10px;">Combinations of signals that consistently win or lose</p>
                     <div id="backtestTopPatterns"></div>
+                </div>
+                <div class="backtest-pattern-section">
+                    <div class="backtest-pattern-title" style="color: #FFD700; border-bottom-color: #FFD700;">Data-Driven Sweet Spot Discovery</div>
+                    <div class="backtest-explanation"><p><strong>How it works:</strong> The engine tests hundreds of possible criteria ranges and combinations against your actual match results. For each numerical feature (O2.5 prob, O1.5 odds, BTTS odds, clean sheet %), it tries different boundary ranges. For categorical features (regression signal, Z-Score signal, BTTS confidence), it tests each category. Then it searches for the best 2-criterion and 3-criterion combinations that produce the highest O2.5 hit rate with at least 3 matches. The result: <strong>data-proven sweet spot criteria</strong> derived from your specific dataset.</p></div>
+                    <div id="discoveredSweetSpot"></div>
                 </div>
                 <div class="backtest-pattern-section">
                     <div class="backtest-pattern-title">Individual Match Results</div>
@@ -1388,6 +1427,8 @@
                 patternsHtml += `<div class="backtest-pattern-card ${cardClass}"><div class="backtest-pattern-header">${sp.name}</div><div class="backtest-pattern-stats"><div class="backtest-pattern-stat"><div class="backtest-pattern-stat-label">Matches</div><div class="backtest-pattern-stat-value">${matches.length}</div></div><div class="backtest-pattern-stat"><div class="backtest-pattern-stat-label">O2.5 Rate</div><div class="backtest-pattern-stat-value ${o25Rate >= 65 ? 'green' : o25Rate <= 45 ? 'red' : ''}">${o25Rate.toFixed(1)}%</div></div><div class="backtest-pattern-stat"><div class="backtest-pattern-stat-label">BTTS Rate</div><div class="backtest-pattern-stat-value ${bttsRate >= 60 ? 'green' : bttsRate <= 40 ? 'red' : ''}">${bttsRate.toFixed(1)}%</div></div></div></div>`;
             });
             document.getElementById('backtestTopPatterns').innerHTML = patternsHtml || '<div class="no-data-message">Not enough data for pattern detection</div>';
+            // ===== DATA-DRIVEN SWEET SPOT DISCOVERY =====
+            renderDiscoveredSweetSpot(validResults);
             // Individual match results
             const sortedByProb = [...validResults].sort((a, b) => b.over25Prob - a.over25Prob);
             let matchHtml = '';
@@ -1408,6 +1449,432 @@
                 </div>`;
             });
             document.getElementById('backtestMatchList').innerHTML = matchHtml;
+        }
+
+        // ==================== DATA-DRIVEN SWEET SPOT DISCOVERY ====================
+        function renderDiscoveredSweetSpot(results) {
+            const container = document.getElementById('discoveredSweetSpot');
+            if (results.length < 5) {
+                container.innerHTML = '<div class="no-data-message">Need at least 5 backtest results to discover sweet spot criteria.</div>';
+                return;
+            }
+            const MIN_MATCHES = 3; // Minimum matches for a pattern to be considered valid
+
+            // ===== STEP 1: Find optimal ranges for each numerical feature =====
+            function findBestRange(results, getValue, minVal, maxVal, step, featureName) {
+                let bestRange = null;
+                let bestScore = -1;
+                const testedRanges = [];
+                for (let low = minVal; low < maxVal; low += step) {
+                    for (let high = low + step; high <= maxVal + 0.01; high += step) {
+                        const inRange = results.filter(r => getValue(r) >= low && getValue(r) < high);
+                        if (inRange.length < MIN_MATCHES) continue;
+                        const o25Hits = inRange.filter(r => r.actualO25).length;
+                        const o25Rate = (o25Hits / inRange.length) * 100;
+                        const bttsHits = inRange.filter(r => r.actualBTTS).length;
+                        const bttsRate = (bttsHits / inRange.length) * 100;
+                        // Score: weighted combination of hit rate and sample size
+                        // Higher hit rate is good, but we also want enough matches
+                        const score = o25Rate + (Math.min(inRange.length, 15) * 2); // Reward up to 15 matches
+                        testedRanges.push({
+                            label: `${low.toFixed(2)} - ${high.toFixed(2)}`,
+                            low, high,
+                            matches: inRange.length,
+                            o25Hits, o25Rate, bttsRate,
+                            score
+                        });
+                        if (o25Rate > bestScore && inRange.length >= MIN_MATCHES) {
+                            bestScore = o25Rate;
+                            bestRange = { label: `${low.toFixed(2)} - ${high.toFixed(2)}`, low, high, matches: inRange.length, o25Hits, o25Rate, bttsRate };
+                        }
+                    }
+                }
+                // Also sort by hit rate to get top 3
+                testedRanges.sort((a, b) => b.o25Rate - a.o25Rate || b.matches - a.matches);
+                return { best: bestRange, topRanges: testedRanges.slice(0, 3) };
+            }
+
+            // Find best ranges for numerical features
+            const o25ProbDiscovery = findBestRange(results, r => r.over25Prob, 30, 95, 5, 'O2.5 Prob');
+            const o15OddsDiscovery = findBestRange(results, r => r.o15Odds, 1.00, 1.40, 0.03, 'O1.5 Odds');
+            const bttsOddsDiscovery = findBestRange(results, r => r.bttsOdds, 1.10, 2.50, 0.05, 'BTTS Odds');
+            const homeCSDiscovery = findBestRange(results, r => r.homeCSP, 0, 60, 5, 'Home CS%');
+            const awayCSDiscovery = findBestRange(results, r => r.awayCSP, 0, 60, 5, 'Away CS%');
+
+            // Find best categories for categorical features
+            function findBestCategory(results, getValue, categories, featureName) {
+                let bestCat = null;
+                let bestRate = -1;
+                const catResults = [];
+                categories.forEach(cat => {
+                    const inCat = results.filter(r => getValue(r) === cat);
+                    if (inCat.length < MIN_MATCHES) return;
+                    const o25Hits = inCat.filter(r => r.actualO25).length;
+                    const o25Rate = (o25Hits / inCat.length) * 100;
+                    const bttsHits = inCat.filter(r => r.actualBTTS).length;
+                    const bttsRate = (bttsHits / inCat.length) * 100;
+                    catResults.push({ label: cat, matches: inCat.length, o25Hits, o25Rate, bttsRate });
+                    if (o25Rate > bestRate) { bestRate = o25Rate; bestCat = { label: cat, matches: inCat.length, o25Hits, o25Rate, bttsRate }; }
+                });
+                catResults.sort((a, b) => b.o25Rate - a.o25Rate);
+                return { best: bestCat, topCategories: catResults.slice(0, 3) };
+            }
+
+            const regressionDiscovery = findBestCategory(results, r => r.regressionSignal,
+                ['Strong Over', 'Mixed (Over Lean)', 'Neutral', 'Mixed (Under Lean)', 'Strong Under'], 'Regression Signal');
+            const zscoreDiscovery = findBestCategory(results, r => r.zScoreSignal,
+                ['Strong Over', 'Mixed (Over Lean)', 'Neutral', 'Mixed (Under Lean)', 'Strong Under'], 'Z-Score Signal');
+            const bttsConfDiscovery = findBestCategory(results, r => r.bttsConf,
+                ['Low', 'Medium', 'High'], 'BTTS Confidence');
+
+            // ===== STEP 2: Find best multi-criteria combinations =====
+            // Build a set of candidate conditions from the best single-feature discoveries
+            const candidateConditions = [];
+
+            // Add O2.5 prob ranges
+            if (o25ProbDiscovery.best) {
+                candidateConditions.push({
+                    name: `O2.5 Prob ${o25ProbDiscovery.best.low.toFixed(0)}%-${o25ProbDiscovery.best.high.toFixed(0)}%`,
+                    check: r => r.over25Prob >= o25ProbDiscovery.best.low && r.over25Prob < o25ProbDiscovery.best.high
+                });
+            }
+            // Add O1.5 odds ranges
+            if (o15OddsDiscovery.best) {
+                candidateConditions.push({
+                    name: `O1.5 Odds ${o15OddsDiscovery.best.low.toFixed(2)}-${o15OddsDiscovery.best.high.toFixed(2)}`,
+                    check: r => r.o15Odds >= o15OddsDiscovery.best.low && r.o15Odds < o15OddsDiscovery.best.high
+                });
+            }
+            // Add BTTS odds ranges
+            if (bttsOddsDiscovery.best) {
+                candidateConditions.push({
+                    name: `BTTS Odds ${bttsOddsDiscovery.best.low.toFixed(2)}-${bttsOddsDiscovery.best.high.toFixed(2)}`,
+                    check: r => r.bttsOdds >= bttsOddsDiscovery.best.low && r.bttsOdds < bttsOddsDiscovery.best.high
+                });
+            }
+            // Add categorical bests
+            if (regressionDiscovery.best) {
+                candidateConditions.push({
+                    name: `Regression: ${regressionDiscovery.best.label}`,
+                    check: r => r.regressionSignal === regressionDiscovery.best.label
+                });
+            }
+            if (zscoreDiscovery.best) {
+                candidateConditions.push({
+                    name: `Z-Score: ${zscoreDiscovery.best.label}`,
+                    check: r => r.zScoreSignal === zscoreDiscovery.best.label
+                });
+            }
+            if (bttsConfDiscovery.best) {
+                candidateConditions.push({
+                    name: `BTTS Conf: ${bttsConfDiscovery.best.label}`,
+                    check: r => r.bttsConf === bttsConfDiscovery.best.label
+                });
+            }
+            // Add clean sheet conditions
+            if (homeCSDiscovery.best) {
+                candidateConditions.push({
+                    name: `Home CS < ${homeCSDiscovery.best.high.toFixed(0)}%`,
+                    check: r => r.homeCSP < homeCSDiscovery.best.high
+                });
+            }
+            if (awayCSDiscovery.best) {
+                candidateConditions.push({
+                    name: `Away CS < ${awayCSDiscovery.best.high.toFixed(0)}%`,
+                    check: r => r.awayCSP < awayCSDiscovery.best.high
+                });
+            }
+
+            // Also add some broader/common ranges as candidates
+            candidateConditions.push({ name: 'O2.5 Prob >= 60%', check: r => r.over25Prob >= 60 });
+            candidateConditions.push({ name: 'O2.5 Prob >= 65%', check: r => r.over25Prob >= 65 });
+            candidateConditions.push({ name: 'O2.5 Prob >= 70%', check: r => r.over25Prob >= 70 });
+            candidateConditions.push({ name: 'O2.5 Prob >= 75%', check: r => r.over25Prob >= 75 });
+            candidateConditions.push({ name: 'BTTS Prob >= 50%', check: r => r.bttsProb >= 50 });
+            candidateConditions.push({ name: 'BTTS Prob >= 55%', check: r => r.bttsProb >= 55 });
+            candidateConditions.push({ name: 'No CS Risk (both < 35%)', check: r => r.homeCSP < 35 && r.awayCSP < 35 });
+            candidateConditions.push({ name: 'Regression: Not Under', check: r => r.regressionSignal !== 'Strong Under' && r.regressionSignal !== 'Mixed (Under Lean)' });
+
+            // Test all 2-criterion combinations
+            const combo2Results = [];
+            for (let i = 0; i < candidateConditions.length; i++) {
+                for (let j = i + 1; j < candidateConditions.length; j++) {
+                    const matches = results.filter(r => candidateConditions[i].check(r) && candidateConditions[j].check(r));
+                    if (matches.length < MIN_MATCHES) continue;
+                    const o25Hits = matches.filter(r => r.actualO25).length;
+                    const o25Rate = (o25Hits / matches.length) * 100;
+                    const bttsHits = matches.filter(r => r.actualBTTS).length;
+                    const bttsRate = (bttsHits / matches.length) * 100;
+                    combo2Results.push({
+                        name: `${candidateConditions[i].name} + ${candidateConditions[j].name}`,
+                        matches: matches.length, o25Hits, o25Rate, bttsRate,
+                        checks: [candidateConditions[i], candidateConditions[j]]
+                    });
+                }
+            }
+            combo2Results.sort((a, b) => b.o25Rate - a.o25Rate || b.matches - a.matches);
+
+            // Test all 3-criterion combinations (from top 2-criterion candidates)
+            const combo3Results = [];
+            const topConditions2 = combo2Results.slice(0, 15); // Use top 15 2-combo conditions
+            const usedConditions = new Set();
+            topConditions2.forEach(c2 => {
+                c2.checks.forEach(ch => usedConditions.add(ch.name));
+            });
+            const uniqueConditionsFor3 = candidateConditions.filter(c => usedConditions.has(c.name));
+
+            for (let i = 0; i < candidateConditions.length; i++) {
+                for (let j = i + 1; j < candidateConditions.length; j++) {
+                    for (let k = j + 1; k < candidateConditions.length; k++) {
+                        const matches = results.filter(r =>
+                            candidateConditions[i].check(r) && candidateConditions[j].check(r) && candidateConditions[k].check(r));
+                        if (matches.length < MIN_MATCHES) continue;
+                        const o25Hits = matches.filter(r => r.actualO25).length;
+                        const o25Rate = (o25Hits / matches.length) * 100;
+                        const bttsHits = matches.filter(r => r.actualBTTS).length;
+                        const bttsRate = (bttsHits / matches.length) * 100;
+                        combo3Results.push({
+                            name: `${candidateConditions[i].name} + ${candidateConditions[j].name} + ${candidateConditions[k].name}`,
+                            matches: matches.length, o25Hits, o25Rate, bttsRate
+                        });
+                    }
+                }
+            }
+            combo3Results.sort((a, b) => b.o25Rate - a.o25Rate || b.matches - a.matches);
+
+            // ===== STEP 3: Build discovered sweet spot =====
+            // The discovered sweet spot is the best 3-criterion combo (or 2-criterion if no good 3-criterion)
+            const bestCombo3 = combo3Results.length > 0 ? combo3Results[0] : null;
+            const bestCombo2 = combo2Results.length > 0 ? combo2Results[0] : null;
+            const discoveredSweetSpot = bestCombo3 && bestCombo3.o25Rate >= (bestCombo2 ? bestCombo2.o25Rate : 0) ? bestCombo3 : bestCombo2;
+
+            // Current sweet spot performance for comparison
+            const currentSSMatches = results.filter(r => r.sweetSpotPasses);
+            const currentSSO25Rate = currentSSMatches.length > 0 ? (currentSSMatches.filter(r => r.actualO25).length / currentSSMatches.length * 100) : 0;
+            const currentSSBTTSRate = currentSSMatches.length > 0 ? (currentSSMatches.filter(r => r.actualBTTS).length / currentSSMatches.length * 100) : 0;
+
+            // ===== STEP 4: Render the results =====
+            let html = '';
+
+            // --- Discovered Sweet Spot Banner ---
+            if (discoveredSweetSpot) {
+                html += `<div class="discovered-ss-banner">`;
+                html += `<div class="discovered-ss-title">DISCOVERED SWEET SPOT</div>`;
+                html += `<div class="discovered-ss-subtitle">Data-derived criteria with highest O2.5 hit rate</div>`;
+                html += `<div class="discovered-ss-criteria-grid">`;
+
+                // Parse the discovered criteria
+                const criteriaParts = discoveredSweetSpot.name.split(' + ');
+                criteriaParts.forEach(part => {
+                    html += `<div class="discovered-ss-criterion">
+                        <div class="discovered-ss-criterion-label">Criterion</div>
+                        <div class="discovered-ss-criterion-value">${part}</div>
+                    </div>`;
+                });
+
+                html += `</div>`;
+                html += `<div class="discovered-ss-stats">`;
+                html += `<div class="discovered-ss-stat"><div class="discovered-ss-stat-value gold">${discoveredSweetSpot.o25Rate.toFixed(1)}%</div><div class="discovered-ss-stat-label">O2.5 Hit Rate</div></div>`;
+                html += `<div class="discovered-ss-stat"><div class="discovered-ss-stat-value green">${discoveredSweetSpot.bttsRate.toFixed(1)}%</div><div class="discovered-ss-stat-label">BTTS Hit Rate</div></div>`;
+                html += `<div class="discovered-ss-stat"><div class="discovered-ss-stat-value" style="color:white;">${discoveredSweetSpot.matches}</div><div class="discovered-ss-stat-label">Matches</div></div>`;
+                html += `<div class="discovered-ss-stat"><div class="discovered-ss-stat-value" style="color:white;">${discoveredSweetSpot.o25Hits}</div><div class="discovered-ss-stat-label">O2.5 Wins</div></div>`;
+                html += `</div>`;
+
+                // Comparison with current sweet spot
+                html += `<div class="discovered-ss-vs-current">`;
+                html += `<div class="discovered-ss-vs-title">Discovered vs Current Sweet Spot (7-criteria)</div>`;
+                html += `<table class="discovered-ss-comparison-table">`;
+                html += `<thead><tr><th>Metric</th><th class="current">Current (7-Criteria)</th><th class="discovered">Discovered</th><th>Change</th></tr></thead><tbody>`;
+                html += `<tr><td>O2.5 Hit Rate</td><td class="current">${currentSSMatches.length > 0 ? currentSSO25Rate.toFixed(1) + '%' : 'N/A'}</td><td class="discovered">${discoveredSweetSpot.o25Rate.toFixed(1)}%</td>`;
+                if (currentSSMatches.length > 0) {
+                    const diff = discoveredSweetSpot.o25Rate - currentSSO25Rate;
+                    html += `<td class="${diff >= 0 ? 'discovered-ss-improvement' : 'discovered-ss-worsening'}">${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%</td>`;
+                } else { html += `<td class="discovered-ss-improvement">+NEW</td>`; }
+                html += `</tr>`;
+                html += `<tr><td>BTTS Hit Rate</td><td class="current">${currentSSMatches.length > 0 ? currentSSBTTSRate.toFixed(1) + '%' : 'N/A'}</td><td class="discovered">${discoveredSweetSpot.bttsRate.toFixed(1)}%</td>`;
+                if (currentSSMatches.length > 0) {
+                    const diff = discoveredSweetSpot.bttsRate - currentSSBTTSRate;
+                    html += `<td class="${diff >= 0 ? 'discovered-ss-improvement' : 'discovered-ss-worsening'}">${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%</td>`;
+                } else { html += `<td class="discovered-ss-improvement">+NEW</td>`; }
+                html += `</tr>`;
+                html += `<tr><td>Match Count</td><td class="current">${currentSSMatches.length}</td><td class="discovered">${discoveredSweetSpot.matches}</td>`;
+                html += `<td style="color:white;">${discoveredSweetSpot.matches - currentSSMatches.length >= 0 ? '+' : ''}${discoveredSweetSpot.matches - currentSSMatches.length}</td></tr>`;
+                html += `<tr><td>Criteria Count</td><td class="current">7</td><td class="discovered">${criteriaParts.length}</td>`;
+                html += `<td style="color:white;">${criteriaParts.length - 7 >= 0 ? '+' : ''}${criteriaParts.length - 7}</td></tr>`;
+                html += `</tbody></table></div>`;
+                html += `</div>`;
+            } else {
+                html += `<div class="discovered-ss-banner"><div class="discovered-ss-title">NO DISCOVERED SWEET SPOT</div><div class="discovered-ss-subtitle">Insufficient data to discover meaningful patterns. Need more matches with diverse outcomes.</div></div>`;
+            }
+
+            // --- Best individual feature ranges ---
+            html += `<div style="margin-top: 20px;">`;
+            html += `<div class="backtest-pattern-title">Best Single-Feature Ranges</div>`;
+            html += `<div class="backtest-pattern-grid">`;
+
+            function renderSingleFeatureCard(title, discovery, isCategory) {
+                if (!discovery || !discovery.best) return '';
+                const b = discovery.best;
+                const cardClass = b.o25Rate >= 65 ? 'hit' : b.o25Rate <= 45 ? 'miss' : 'caution';
+                return `<div class="backtest-pattern-card ${cardClass}">
+                    <div class="backtest-pattern-header">${title}</div>
+                    <div class="backtest-pattern-stats">
+                        <div class="backtest-pattern-stat"><div class="backtest-pattern-stat-label">Best Range</div><div class="backtest-pattern-stat-value" style="font-size:12px;">${b.label}</div></div>
+                        <div class="backtest-pattern-stat"><div class="backtest-pattern-stat-label">Matches</div><div class="backtest-pattern-stat-value">${b.matches}</div></div>
+                        <div class="backtest-pattern-stat"><div class="backtest-pattern-stat-label">O2.5 Rate</div><div class="backtest-pattern-stat-value ${b.o25Rate >= 65 ? 'green' : b.o25Rate <= 45 ? 'red' : ''}">${b.o25Rate.toFixed(1)}%</div></div>
+                    </div>
+                </div>`;
+            }
+
+            html += renderSingleFeatureCard('O2.5 Probability', o25ProbDiscovery);
+            html += renderSingleFeatureCard('O1.5 Odds', o15OddsDiscovery);
+            html += renderSingleFeatureCard('BTTS Odds', bttsOddsDiscovery);
+            html += renderSingleFeatureCard('Home Clean Sheet %', homeCSDiscovery);
+            html += renderSingleFeatureCard('Away Clean Sheet %', awayCSDiscovery);
+            html += renderSingleFeatureCard('Regression Signal', regressionDiscovery, true);
+            html += renderSingleFeatureCard('Z-Score Signal', zscoreDiscovery, true);
+            html += renderSingleFeatureCard('BTTS Confidence', bttsConfDiscovery, true);
+            html += `</div></div>`;
+
+            // --- Top 2-Criterion Combinations ---
+            html += `<div style="margin-top: 20px;">`;
+            html += `<div class="backtest-pattern-title">Top 2-Criterion Combinations</div>`;
+            html += `<div class="backtest-pattern-grid">`;
+            combo2Results.slice(0, 8).forEach((combo, idx) => {
+                const cardClass = idx === 0 ? 'best' : combo.o25Rate >= 65 ? 'good' : '';
+                html += `<div class="discovered-ss-alt-card ${cardClass}">
+                    <div class="discovered-ss-alt-header">${idx + 1}. ${combo.name}</div>
+                    <div class="discovered-ss-alt-stats">
+                        <div class="discovered-ss-alt-stat"><div class="discovered-ss-alt-stat-value ${combo.o25Rate >= 65 ? 'green' : ''}">${combo.o25Rate.toFixed(1)}%</div><div class="discovered-ss-alt-stat-label">O2.5 Rate</div></div>
+                        <div class="discovered-ss-alt-stat"><div class="discovered-ss-alt-stat-value">${combo.bttsRate.toFixed(1)}%</div><div class="discovered-ss-alt-stat-label">BTTS Rate</div></div>
+                        <div class="discovered-ss-alt-stat"><div class="discovered-ss-alt-stat-value">${combo.matches}</div><div class="discovered-ss-alt-stat-label">Matches</div></div>
+                        <div class="discovered-ss-alt-stat"><div class="discovered-ss-alt-stat-value">${combo.o25Hits}</div><div class="discovered-ss-alt-stat-label">O2.5 Wins</div></div>
+                    </div>
+                </div>`;
+            });
+            html += `</div></div>`;
+
+            // --- Top 3-Criterion Combinations ---
+            if (combo3Results.length > 0) {
+                html += `<div style="margin-top: 20px;">`;
+                html += `<div class="backtest-pattern-title">Top 3-Criterion Combinations</div>`;
+                html += `<div class="backtest-pattern-grid">`;
+                combo3Results.slice(0, 6).forEach((combo, idx) => {
+                    const cardClass = idx === 0 ? 'best' : combo.o25Rate >= 65 ? 'good' : '';
+                    html += `<div class="discovered-ss-alt-card ${cardClass}">
+                        <div class="discovered-ss-alt-header">${idx + 1}. ${combo.name}</div>
+                        <div class="discovered-ss-alt-stats">
+                            <div class="discovered-ss-alt-stat"><div class="discovered-ss-alt-stat-value ${combo.o25Rate >= 65 ? 'green' : ''}">${combo.o25Rate.toFixed(1)}%</div><div class="discovered-ss-alt-stat-label">O2.5 Rate</div></div>
+                            <div class="discovered-ss-alt-stat"><div class="discovered-ss-alt-stat-value">${combo.bttsRate.toFixed(1)}%</div><div class="discovered-ss-alt-stat-label">BTTS Rate</div></div>
+                            <div class="discovered-ss-alt-stat"><div class="discovered-ss-alt-stat-value">${combo.matches}</div><div class="discovered-ss-alt-stat-label">Matches</div></div>
+                            <div class="discovered-ss-alt-stat"><div class="discovered-ss-alt-stat-value">${combo.o25Hits}</div><div class="discovered-ss-alt-stat-label">O2.5 Wins</div></div>
+                        </div>
+                    </div>`;
+                });
+                html += `</div></div>`;
+            }
+
+            // --- All criteria comparison table ---
+            html += `<div style="margin-top: 20px;">`;
+            html += `<div class="backtest-pattern-title">Discovered vs Current Criteria Comparison</div>`;
+            html += `<table class="backtest-confidence-table"><thead><tr><th>Feature</th><th>Current Range</th><th>Discovered Best Range</th><th>Current O2.5%</th><th>Discovered O2.5%</th><th>Change</th></tr></thead><tbody>`;
+
+            const comparisonRows = [
+                {
+                    feature: 'O1.5 Odds',
+                    current: '1.06 - 1.15',
+                    discovery: o15OddsDiscovery
+                },
+                {
+                    feature: 'BTTS Odds',
+                    current: '1.30 - 1.50',
+                    discovery: bttsOddsDiscovery
+                },
+                {
+                    feature: 'O2.5 Prob',
+                    current: '68% - 80%',
+                    discovery: o25ProbDiscovery
+                },
+                {
+                    feature: 'Clean Sheet',
+                    current: 'Both < 35%',
+                    discovery: null // Special handling
+                },
+                {
+                    feature: 'BTTS Confidence',
+                    current: 'Medium',
+                    discovery: bttsConfDiscovery
+                },
+                {
+                    feature: 'Regression Signal',
+                    current: 'Mixed (Over Lean)',
+                    discovery: regressionDiscovery
+                },
+                {
+                    feature: 'Z-Score Signal',
+                    current: 'Neutral',
+                    discovery: zscoreDiscovery
+                }
+            ];
+
+            comparisonRows.forEach(row => {
+                const dBest = row.discovery ? row.discovery.best : null;
+                const discoveredLabel = dBest ? dBest.label : 'N/A';
+                const discoveredRate = dBest ? dBest.o25Rate : 0;
+
+                // Calculate current range O2.5 hit rate
+                let currentRate = 0;
+                let currentMatchList = [];
+                switch (row.feature) {
+                    case 'O1.5 Odds':
+                        currentMatchList = results.filter(r => r.o15Odds >= 1.06 && r.o15Odds <= 1.15);
+                        break;
+                    case 'BTTS Odds':
+                        currentMatchList = results.filter(r => r.bttsOdds >= 1.30 && r.bttsOdds <= 1.50);
+                        break;
+                    case 'O2.5 Prob':
+                        currentMatchList = results.filter(r => r.over25Prob >= 68 && r.over25Prob <= 80);
+                        break;
+                    case 'Clean Sheet':
+                        currentMatchList = results.filter(r => r.homeCSP < 35 && r.awayCSP < 35);
+                        break;
+                    case 'BTTS Confidence':
+                        currentMatchList = results.filter(r => r.bttsConf === 'Medium');
+                        break;
+                    case 'Regression Signal':
+                        currentMatchList = results.filter(r => r.regressionSignal === 'Mixed (Over Lean)');
+                        break;
+                    case 'Z-Score Signal':
+                        currentMatchList = results.filter(r => r.zScoreSignal === 'Neutral');
+                        break;
+                }
+                const currentMatches = currentMatchList.length;
+                if (currentMatchList.length > 0) {
+                    currentRate = (currentMatchList.filter(r => r.actualO25).length / currentMatchList.length) * 100;
+                }
+
+                const diff = dBest ? discoveredRate - currentRate : 0;
+                const diffClass = diff > 2 ? 'discovered-ss-improvement' : diff < -2 ? 'discovered-ss-worsening' : '';
+                html += `<tr>
+                    <td><strong>${row.feature}</strong></td>
+                    <td>${row.current} (${currentMatches} matches)</td>
+                    <td class="discovered" style="color: #FFD700; font-weight: bold;">${discoveredLabel}${dBest ? ` (${dBest.matches})` : ''}</td>
+                    <td>${currentMatches > 0 ? currentRate.toFixed(1) + '%' : 'N/A'}</td>
+                    <td style="color: #FFD700; font-weight: bold;">${dBest ? discoveredRate.toFixed(1) + '%' : 'N/A'}</td>
+                    <td class="${diffClass}">${dBest ? (diff >= 0 ? '+' : '') + diff.toFixed(1) + '%' : '-'}</td>
+                </tr>`;
+            });
+
+            html += `</tbody></table></div>`;
+
+            // --- Overfitting warning ---
+            html += `<div style="margin-top: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 12px;">`;
+            html += `<div style="font-size: 13px; font-weight: bold; color: #856404; margin-bottom: 5px;">Overfitting Warning</div>`;
+            html += `<div style="font-size: 12px; color: #856404;">With ${results.length} matches, discovered criteria may be overfitted to this specific dataset. `;
+            html += `The more matches you load, the more reliable the discovery becomes. For strong confidence, aim for 100+ matches. `;
+            html += `Treat discovered criteria as <strong>suggestions</strong> - always verify with new data before committing.</div></div>`;
+
+            container.innerHTML = html;
         }
 
         function exportBacktestCSV() {
