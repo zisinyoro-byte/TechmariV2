@@ -282,6 +282,53 @@
         .sweet-spot-criteria-item { font-size: 11px; padding: 4px 8px; border-radius: 4px; display: flex; align-items: center; gap: 5px; }
         .sweet-spot-criteria-item.pass { background: rgba(40, 167, 69, 0.15); color: #155724; }
         .sweet-spot-criteria-item.fail { background: rgba(220, 53, 69, 0.1); color: #721c24; }
+        /* Backtest Mode Styles */
+        #backtestSection { background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e9ecef; margin-top: 20px; }
+        .backtest-explanation { background: #f8f9fa; border-radius: 6px; padding: 12px; margin-bottom: 15px; border: 1px dashed #ced4da; }
+        .backtest-explanation p { text-align: left; font-size: 12px; color: #6c757d; margin: 0; line-height: 1.5; }
+        .btn-backtest { background-color: #17a2b8; color: white; }
+        .backtest-progress { margin: 15px 0; }
+        .backtest-progress-bar { height: 12px; background: #e9ecef; border-radius: 6px; overflow: hidden; position: relative; }
+        .backtest-progress-fill { height: 100%; background: linear-gradient(90deg, #17a2b8, #20c997); border-radius: 6px; transition: width 0.3s ease; }
+        .backtest-progress-text { font-size: 12px; color: #6c757d; text-align: center; margin-top: 5px; }
+        .backtest-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .backtest-stat-card { background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%); padding: 15px; border-radius: 8px; border: 1px solid #e9ecef; text-align: center; }
+        .backtest-stat-label { font-size: 10px; text-transform: uppercase; color: #6c757d; letter-spacing: 0.5px; margin-bottom: 5px; }
+        .backtest-stat-value { font-size: 22px; font-weight: bold; color: #34495e; }
+        .backtest-stat-value.green { color: #28a745; }
+        .backtest-stat-value.red { color: #dc3545; }
+        .backtest-stat-value.orange { color: #fd7e14; }
+        .backtest-stat-value.blue { color: #0056b3; }
+        .backtest-stat-sub { font-size: 11px; color: #6c757d; margin-top: 3px; }
+        .backtest-pattern-section { margin-top: 20px; }
+        .backtest-pattern-title { font-size: 16px; font-weight: bold; color: #34495e; border-bottom: 2px solid #e9ecef; padding-bottom: 8px; margin-bottom: 12px; }
+        .backtest-pattern-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+        @media (max-width: 768px) { .backtest-pattern-grid { grid-template-columns: 1fr; } }
+        .backtest-pattern-card { background: #f8f9fa; border-radius: 8px; padding: 15px; border: 1px solid #e9ecef; border-left: 4px solid #6c757d; }
+        .backtest-pattern-card.hit { border-left-color: #28a745; background: linear-gradient(90deg, #d4edda 0%, #f8f9fa 100%); }
+        .backtest-pattern-card.miss { border-left-color: #dc3545; background: linear-gradient(90deg, #f8d7da 0%, #f8f9fa 100%); }
+        .backtest-pattern-card.caution { border-left-color: #fd7e14; background: linear-gradient(90deg, #fff3cd 0%, #f8f9fa 100%); }
+        .backtest-pattern-header { font-size: 14px; font-weight: bold; color: #34495e; margin-bottom: 8px; }
+        .backtest-pattern-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .backtest-pattern-stat { text-align: center; }
+        .backtest-pattern-stat-label { font-size: 9px; text-transform: uppercase; color: #6c757d; letter-spacing: 0.5px; }
+        .backtest-pattern-stat-value { font-size: 16px; font-weight: bold; color: #495057; }
+        .backtest-pattern-stat-value.green { color: #28a745; }
+        .backtest-pattern-stat-value.red { color: #dc3545; }
+        .backtest-confidence-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+        .backtest-confidence-table th { background: #e9ecef; padding: 8px; text-align: left; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; }
+        .backtest-confidence-table td { padding: 8px; border-bottom: 1px solid #e9ecef; color: #495057; }
+        .backtest-confidence-table tr:hover { background: #f8f9fa; }
+        .backtest-edge-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
+        .backtest-edge-badge.positive { background: #28a745; color: white; }
+        .backtest-edge-badge.negative { background: #dc3545; color: white; }
+        .backtest-edge-badge.neutral { background: #6c757d; color: white; }
+        .backtest-match-row { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; margin-bottom: 5px; background: white; border-radius: 4px; border: 1px solid #e9ecef; font-size: 12px; }
+        .backtest-match-row:hover { background: #f8f9fa; }
+        .backtest-match-result { padding: 3px 10px; border-radius: 12px; font-weight: bold; font-size: 11px; }
+        .backtest-match-result.hit { background: #28a745; color: white; }
+        .backtest-match-result.miss { background: #dc3545; color: white; }
+        .backtest-export-btn { margin-top: 15px; }
     </style>
 </head>
 <body>
@@ -453,6 +500,60 @@
                 <div class="high-prob-column btts"><h4>Both Teams To Score</h4><div id="bttsTeamsList"></div></div>
             </div>
         </div>
+        <div id="backtestSection" class="hidden">
+            <h3>Backtest Mode: Pattern Analysis</h3>
+            <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Retroactively run the prediction engine on all loaded matches to find winning &amp; losing patterns</p>
+            <div class="backtest-explanation"><p><strong>How it works:</strong> For each match, the engine builds a "leave-one-out" model using all OTHER matches as training data (no look-ahead bias). It then records what the model predicted vs what actually happened, identifying which signals, confidence levels, and probability ranges correlate with actual results. The Sweet Spot criteria are also retroactively evaluated to show their historical hit rate.</p></div>
+            <div style="text-align: center; margin-bottom: 15px;">
+                <button onclick="runBacktest()" class="btn-backtest" id="backtestBtn">Run Backtest Analysis</button>
+            </div>
+            <div id="backtestProgress" class="backtest-progress" style="display:none;">
+                <div class="backtest-progress-bar"><div class="backtest-progress-fill" id="backtestProgressFill" style="width: 0%;"></div></div>
+                <div class="backtest-progress-text" id="backtestProgressText">Preparing...</div>
+            </div>
+            <div id="backtestResults" style="display:none;">
+                <div class="backtest-pattern-title">Overall Accuracy</div>
+                <div class="backtest-summary-grid" id="backtestSummaryGrid"></div>
+                <div class="backtest-pattern-section">
+                    <div class="backtest-pattern-title">O2.5 Probability Ranges vs Actual Hit Rate</div>
+                    <p style="font-size:11px; color:#6c757d; margin-bottom: 10px;">Shows whether the model's O2.5 probability bands over- or under-predict actual Over 2.5 results</p>
+                    <div id="backtestO25Ranges"></div>
+                </div>
+                <div class="backtest-pattern-section">
+                    <div class="backtest-pattern-title">BTTS Confidence vs Actual Hit Rate</div>
+                    <p style="font-size:11px; color:#6c757d; margin-bottom: 10px;">Which BTTS confidence levels actually deliver</p>
+                    <div id="backtestBttsConfidence"></div>
+                </div>
+                <div class="backtest-pattern-section">
+                    <div class="backtest-pattern-title">Regression Signal vs O2.5 Actual</div>
+                    <p style="font-size:11px; color:#6c757d; margin-bottom: 10px;">Do regression signals predict Over/Under outcomes?</p>
+                    <div class="backtest-pattern-grid" id="backtestRegressionGrid"></div>
+                </div>
+                <div class="backtest-pattern-section">
+                    <div class="backtest-pattern-title">Z-Score Signal vs O2.5 Actual</div>
+                    <p style="font-size:11px; color:#6c757d; margin-bottom: 10px;">Do Z-Score signals predict Over/Under outcomes?</p>
+                    <div class="backtest-pattern-grid" id="backtestZScoreGrid"></div>
+                </div>
+                <div class="backtest-pattern-section">
+                    <div class="backtest-pattern-title">Sweet Spot Criteria Breakdown</div>
+                    <p style="font-size:11px; color:#6c757d; margin-bottom: 10px;">How often each Sweet Spot criterion passes, and the O2.5 hit rate when it does vs doesn't</p>
+                    <div id="backtestSweetSpotTable"></div>
+                </div>
+                <div class="backtest-pattern-section">
+                    <div class="backtest-pattern-title">Top Repeating Patterns</div>
+                    <p style="font-size:11px; color:#6c757d; margin-bottom: 10px;">Combinations of signals that consistently win or lose</p>
+                    <div id="backtestTopPatterns"></div>
+                </div>
+                <div class="backtest-pattern-section">
+                    <div class="backtest-pattern-title">Individual Match Results</div>
+                    <p style="font-size:11px; color:#6c757d; margin-bottom: 10px;">Every match with model prediction vs actual outcome</p>
+                    <div style="max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px; background: #f8f9fa;" id="backtestMatchList"></div>
+                </div>
+                <div style="text-align: center;" class="backtest-export-btn">
+                    <button onclick="exportBacktestCSV()" class="btn-export">Export Backtest CSV</button>
+                </div>
+            </div>
+        </div>
         <div id="tableContainer" class="table-wrapper hidden">
             <table id="resultsTable">
                 <thead><tr><th>League</th><th>Round</th><th>Date</th><th>Home Team</th><th>Away Team</th><th>Home Score</th><th>Away Score</th></tr></thead>
@@ -568,6 +669,7 @@
             document.getElementById('deviationAnalysisSection').classList.remove('hidden');
             document.getElementById('zScoreSection').classList.remove('hidden');
             document.getElementById('strongBetSection').classList.remove('hidden');
+            document.getElementById('backtestSection').classList.remove('hidden');
         }
 
         function calculateTeamStats() {
@@ -1014,6 +1116,310 @@
             else if (cs === 'mixed-under-lean') { ct = 'MIXED SIGNALS (UNDER LEAN)'; cd = `${homeData.signal === 'down' ? homeData.team : awayData.team} shows overperformance. Partial UNDER signal.`; r = 'Proceed with Caution'; box.classList.add('zs-caution'); rec.classList.add('caution'); }
             else { ct = 'NEUTRAL'; cd = `Both teams within normal Z-Score range (${homeData.team}: ${homeData.zScore > 0 ? '+' : ''}${homeData.zScore.toFixed(2)}, ${awayData.team}: ${awayData.zScore > 0 ? '+' : ''}${awayData.zScore.toFixed(2)}). No statistically significant deviation.`; r = 'No Strong Signal'; box.classList.add('zs-caution'); rec.classList.add('caution'); }
             value.innerText = ct; desc.innerText = cd; rec.innerText = r;
+        }
+
+        // ==================== BACKTEST MODE ====================
+        let lastBacktestResults = null;
+
+        function buildTeamStatsFromMatches(matches) {
+            const teams = {};
+            const leagueHomeAvg = matches.reduce((a, b) => a + b.homeScore, 0) / matches.length;
+            const leagueAwayAvg = matches.reduce((a, b) => a + b.awayScore, 0) / matches.length;
+            matches.forEach(m => {
+                if (!teams[m.homeTeam]) teams[m.homeTeam] = { hGoals: 0, aGoals: 0, hConc: 0, aConc: 0, hGames: 0, aGames: 0 };
+                if (!teams[m.awayTeam]) teams[m.awayTeam] = { hGoals: 0, aGoals: 0, hConc: 0, aConc: 0, hGames: 0, aGames: 0 };
+                teams[m.homeTeam].hGoals += m.homeScore; teams[m.homeTeam].hConc += m.awayScore; teams[m.homeTeam].hGames++;
+                teams[m.awayTeam].aGoals += m.awayScore; teams[m.awayTeam].aConc += m.homeScore; teams[m.awayTeam].aGames++;
+            });
+            const stats = {};
+            for (let t in teams) {
+                const d = teams[t]; const totalGames = (d.hGames + d.aGames) || 1;
+                const avgScored = (d.hGoals + d.aGoals) / totalGames; const avgConc = (d.hConc + d.aConc) / totalGames;
+                const leagueAvgGoals = (leagueHomeAvg + leagueAwayAvg) / 2;
+                stats[t] = { attack: (avgScored / leagueAvgGoals) || 1, defense: (avgConc / leagueAvgGoals) || 1, homeAdv: 1.05, avgScored, avgConceded: avgConc, totalGames };
+            }
+            return { stats, leagueHomeAvg, leagueAwayAvg };
+        }
+
+        function backtestPredictSingle(match, trainingMatches) {
+            if (trainingMatches.length < 3) return null;
+            const { stats, leagueHomeAvg, leagueAwayAvg } = buildTeamStatsFromMatches(trainingMatches);
+            const hStats = stats[match.homeTeam]; const aStats = stats[match.awayTeam];
+            if (!hStats || !aStats) return null;
+            if (hStats.totalGames < 2 || aStats.totalGames < 2) return null;
+            const lambdaHome = hStats.attack * aStats.defense * leagueHomeAvg * hStats.homeAdv;
+            const lambdaAway = aStats.attack * hStats.defense * leagueAwayAvg;
+            // Monte Carlo with fewer iterations for speed
+            let over15 = 0, over25 = 0, over35 = 0, bttsCount = 0;
+            const iters = 10000;
+            for (let i = 0; i < iters; i++) {
+                const hG = getPoisson(lambdaHome); const aG = getPoisson(lambdaAway);
+                if ((hG + aG) > 1.5) over15++; if ((hG + aG) > 2.5) over25++; if ((hG + aG) > 3.5) over35++; if (hG > 0 && aG > 0) bttsCount++;
+            }
+            const over15Prob = (over15 / iters) * 100;
+            const over25Prob = (over25 / iters) * 100;
+            const over35Prob = (over35 / iters) * 100;
+            const bttsProb = (bttsCount / iters) * 100;
+            // Deviation analysis
+            const homeMatches = trainingMatches.filter(m => m.homeTeam === match.homeTeam || m.awayTeam === match.homeTeam);
+            const awayMatches = trainingMatches.filter(m => m.homeTeam === match.awayTeam || m.awayTeam === match.awayTeam);
+            const homeDev = calcDevForBacktest(match.homeTeam, homeMatches);
+            const awayDev = calcDevForBacktest(match.awayTeam, awayMatches);
+            // Combined deviation signal
+            let regressionSignal = "Neutral";
+            if (homeDev.signal === 'up' && awayDev.signal === 'up') regressionSignal = "Strong Over";
+            else if (homeDev.signal === 'down' && awayDev.signal === 'down') regressionSignal = "Strong Under";
+            else if (homeDev.signal === 'up' || awayDev.signal === 'up') regressionSignal = "Mixed (Over Lean)";
+            else if (homeDev.signal === 'down' || awayDev.signal === 'down') regressionSignal = "Mixed (Under Lean)";
+            // Z-Score analysis
+            const homeZS = calcZScoreForBacktest(match.homeTeam, homeMatches);
+            const awayZS = calcZScoreForBacktest(match.awayTeam, awayMatches);
+            let zScoreSignal = "Neutral";
+            if (homeZS.signal === 'up' && awayZS.signal === 'up') zScoreSignal = "Strong Over";
+            else if (homeZS.signal === 'down' && awayZS.signal === 'down') zScoreSignal = "Strong Under";
+            else if (homeZS.signal === 'up' || awayZS.signal === 'up') zScoreSignal = "Mixed (Over Lean)";
+            else if (homeZS.signal === 'down' || awayZS.signal === 'down') zScoreSignal = "Mixed (Under Lean)";
+            // Sweet Spot criteria
+            const o15Odds = parseFloat(probToOdds(over15Prob));
+            const bttsOdds = parseFloat(probToOdds(bttsProb));
+            const homeCSP = (Math.exp(-lambdaAway)) * 100;
+            const awayCSP = (Math.exp(-lambdaHome)) * 100;
+            const noCS = homeCSP < 35 && awayCSP < 35;
+            const bttsConf = getConfidence(bttsProb, 'btts');
+            const sweetSpotCriteria = [
+                o15Odds >= 1.06 && o15Odds <= 1.15,
+                bttsOdds >= 1.30 && bttsOdds <= 1.50,
+                over25Prob >= 68 && over25Prob <= 80,
+                noCS,
+                bttsConf === 'Medium',
+                regressionSignal === 'Mixed (Over Lean)',
+                zScoreSignal === 'Neutral'
+            ];
+            const sweetSpotPasses = sweetSpotCriteria.every(c => c);
+            const sweetSpotCount = sweetSpotCriteria.filter(c => c).length;
+            return {
+                match, lambdaHome, lambdaAway, over15Prob, over25Prob, over35Prob, bttsProb,
+                regressionSignal, zScoreSignal, o15Odds, bttsOdds, homeCSP, awayCSP, bttsConf,
+                sweetSpotPasses, sweetSpotCount, sweetSpotCriteria,
+                actualO25: (match.homeScore + match.awayScore) > 2.5,
+                actualO15: (match.homeScore + match.awayScore) > 1.5,
+                actualBTTS: match.homeScore > 0 && match.awayScore > 0,
+                totalGoals: match.homeScore + match.awayScore
+            };
+        }
+
+        function calcDevForBacktest(team, teamMatches) {
+            if (teamMatches.length === 0) return { signal: 'neutral', deviation: 0 };
+            let totalGoals = 0;
+            teamMatches.forEach(m => { totalGoals += m.homeTeam === team ? m.homeScore : m.awayScore; });
+            const meanGoals = totalGoals / teamMatches.length;
+            const last3 = teamMatches.slice(-3); let last3Goals = 0;
+            last3.forEach(m => { last3Goals += m.homeTeam === team ? m.homeScore : m.awayScore; });
+            const last3Avg = last3.length > 0 ? last3Goals / last3.length : 0;
+            let deviation = meanGoals > 0 ? ((last3Avg - meanGoals) / meanGoals) * 100 : 0;
+            let signal = 'neutral';
+            if (deviation < -15) signal = 'up'; else if (deviation > 15) signal = 'down';
+            return { signal, deviation, meanGoals, last3Avg };
+        }
+
+        function calcZScoreForBacktest(team, teamMatches) {
+            if (teamMatches.length < 3) return { signal: 'neutral', zScore: 0 };
+            const goalsPerMatch = teamMatches.map(m => m.homeTeam === team ? m.homeScore : m.awayScore);
+            const mean = goalsPerMatch.reduce((a, b) => a + b, 0) / goalsPerMatch.length;
+            const variance = goalsPerMatch.map(g => Math.pow(g - mean, 2)).reduce((a, b) => a + b, 0) / goalsPerMatch.length;
+            const stdDev = Math.sqrt(variance);
+            const last3 = goalsPerMatch.slice(-3); const last3Avg = last3.reduce((a, b) => a + b, 0) / last3.length;
+            let zScore = stdDev > 0 ? (last3Avg - mean) / stdDev : 0;
+            let signal = 'neutral';
+            if (zScore < -1.0) signal = 'up'; else if (zScore > 1.0) signal = 'down';
+            return { signal, zScore };
+        }
+
+        function runBacktest() {
+            if (globalMatches.length < 5) { alert('Need at least 5 matches to run backtest.'); return; }
+            const btn = document.getElementById('backtestBtn'); btn.disabled = true;
+            const progressDiv = document.getElementById('backtestProgress'); progressDiv.style.display = 'block';
+            const results = [];
+            const total = globalMatches.length;
+            let processed = 0;
+            function processBatch() {
+                const batchSize = Math.min(5, total - processed);
+                for (let b = 0; b < batchSize; b++) {
+                    const match = globalMatches[processed];
+                    const trainingMatches = globalMatches.filter((m, idx) => idx !== processed);
+                    const result = backtestPredictSingle(match, trainingMatches);
+                    if (result) results.push(result);
+                    processed++;
+                }
+                const pct = Math.round((processed / total) * 100);
+                document.getElementById('backtestProgressFill').style.width = pct + '%';
+                document.getElementById('backtestProgressText').innerText = `Analyzing match ${processed} of ${total}...`;
+                if (processed < total) { setTimeout(processBatch, 10); }
+                else { renderBacktestResults(results); btn.disabled = false; }
+            }
+            processBatch();
+        }
+
+        function renderBacktestResults(results) {
+            lastBacktestResults = results;
+            document.getElementById('backtestProgressText').innerText = `Analysis complete! ${results.length} matches analyzed.`;
+            document.getElementById('backtestResults').style.display = 'block';
+            const validResults = results.filter(r => r !== null);
+            const total = validResults.length;
+            if (total === 0) return;
+            // Overall accuracy
+            const o25Hits = validResults.filter(r => r.actualO25).length;
+            const o25Rate = (o25Hits / total * 100);
+            const bttsHits = validResults.filter(r => r.actualBTTS).length;
+            const bttsRate = (bttsHits / total * 100);
+            const o15Hits = validResults.filter(r => r.actualO15).length;
+            const o15Rate = (o15Hits / total * 100);
+            // O2.5 model accuracy: predicted O2.5 and it hit
+            const predO25 = validResults.filter(r => r.over25Prob >= 68);
+            const predO25Hits = predO25.filter(r => r.actualO25).length;
+            const predO25Rate = predO25.length > 0 ? (predO25Hits / predO25.length * 100) : 0;
+            // Sweet Spot hits
+            const sweetSpotMatches = validResults.filter(r => r.sweetSpotPasses);
+            const sweetSpotO25Hits = sweetSpotMatches.filter(r => r.actualO25).length;
+            const sweetSpotO25Rate = sweetSpotMatches.length > 0 ? (sweetSpotO25Hits / sweetSpotMatches.length * 100) : 0;
+            const sweetSpotBTTSHits = sweetSpotMatches.filter(r => r.actualBTTS).length;
+            const sweetSpotBTTSRate = sweetSpotMatches.length > 0 ? (sweetSpotBTTSHits / sweetSpotMatches.length * 100) : 0;
+            document.getElementById('backtestSummaryGrid').innerHTML = `
+                <div class="backtest-stat-card"><div class="backtest-stat-label">Matches Analyzed</div><div class="backtest-stat-value blue">${total}</div><div class="backtest-stat-sub">${globalMatches.length} total loaded</div></div>
+                <div class="backtest-stat-card"><div class="backtest-stat-label">Actual O2.5 Rate</div><div class="backtest-stat-value ${o25Rate >= 50 ? 'green' : 'red'}">${o25Rate.toFixed(1)}%</div><div class="backtest-stat-sub">${o25Hits} of ${total} matches</div></div>
+                <div class="backtest-stat-card"><div class="backtest-stat-label">Actual BTTS Rate</div><div class="backtest-stat-value ${bttsRate >= 50 ? 'green' : 'red'}">${bttsRate.toFixed(1)}%</div><div class="backtest-stat-sub">${bttsHits} of ${total} matches</div></div>
+                <div class="backtest-stat-card"><div class="backtest-stat-label">Model O2.5 (>=68%) Hit Rate</div><div class="backtest-stat-value ${predO25Rate >= 65 ? 'green' : predO25Rate >= 55 ? 'orange' : 'red'}">${predO25Rate.toFixed(1)}%</div><div class="backtest-stat-sub">${predO25Hits} of ${predO25.length} predictions</div></div>
+                <div class="backtest-stat-card"><div class="backtest-stat-label">Sweet Spot Hits</div><div class="backtest-stat-value ${sweetSpotMatches.length > 0 ? 'blue' : ''}">${sweetSpotMatches.length}</div><div class="backtest-stat-sub">${sweetSpotMatches.length > 0 ? `O2.5: ${sweetSpotO25Rate.toFixed(0)}% | BTTS: ${sweetSpotBTTSRate.toFixed(0)}%` : 'No matches hit all 7'}</div></div>
+                <div class="backtest-stat-card"><div class="backtest-stat-label">Actual O1.5 Rate</div><div class="backtest-stat-value green">${o15Rate.toFixed(1)}%</div><div class="backtest-stat-sub">${o15Hits} of ${total} matches</div></div>
+            `;
+            // O2.5 Probability Ranges
+            const o25Ranges = [
+                { label: '< 50%', min: 0, max: 50 }, { label: '50-60%', min: 50, max: 60 },
+                { label: '60-68%', min: 60, max: 68 }, { label: '68-75%', min: 68, max: 75 },
+                { label: '75-80%', min: 75, max: 80 }, { label: '80-85%', min: 80, max: 85 },
+                { label: '> 85%', min: 85, max: 101 }
+            ];
+            let o25TableHtml = '<table class="backtest-confidence-table"><thead><tr><th>O2.5 Prob Range</th><th>Matches</th><th>Actual O2.5 Hit</th><th>Hit Rate</th><th>Edge</th></tr></thead><tbody>';
+            o25Ranges.forEach(range => {
+                const inRange = validResults.filter(r => r.over25Prob >= range.min && r.over25Prob < range.max);
+                if (inRange.length === 0) return;
+                const hits = inRange.filter(r => r.actualO25).length;
+                const rate = (hits / inRange.length * 100);
+                const midProb = (range.min + range.max) / 2;
+                const edge = rate - midProb;
+                const edgeBadge = edge >= 5 ? 'positive' : edge <= -5 ? 'negative' : 'neutral';
+                o25TableHtml += `<tr><td><strong>${range.label}</strong></td><td>${inRange.length}</td><td>${hits}</td><td><strong>${rate.toFixed(1)}%</strong></td><td><span class="backtest-edge-badge ${edgeBadge}">${edge >= 0 ? '+' : ''}${edge.toFixed(1)}%</span></td></tr>`;
+            });
+            o25TableHtml += '</tbody></table>';
+            document.getElementById('backtestO25Ranges').innerHTML = o25TableHtml;
+            // BTTS Confidence vs actual
+            const bttsConfLevels = ['Low', 'Medium', 'High'];
+            let bttsTableHtml = '<table class="backtest-confidence-table"><thead><tr><th>BTTS Confidence</th><th>Matches</th><th>Actual BTTS Hit</th><th>BTTS Hit Rate</th><th>O2.5 Hit Rate</th></tr></thead><tbody>';
+            bttsConfLevels.forEach(level => {
+                const inLevel = validResults.filter(r => r.bttsConf === level);
+                if (inLevel.length === 0) return;
+                const bttsHitsL = inLevel.filter(r => r.actualBTTS).length;
+                const o25HitsL = inLevel.filter(r => r.actualO25).length;
+                bttsTableHtml += `<tr><td><strong>${level}</strong></td><td>${inLevel.length}</td><td>${bttsHitsL}</td><td><strong>${(bttsHitsL / inLevel.length * 100).toFixed(1)}%</strong></td><td>${(o25HitsL / inLevel.length * 100).toFixed(1)}%</td></tr>`;
+            });
+            bttsTableHtml += '</tbody></table>';
+            document.getElementById('backtestBttsConfidence').innerHTML = bttsTableHtml;
+            // Regression Signal vs O2.5 actual
+            const regSignals = ['Strong Over', 'Mixed (Over Lean)', 'Neutral', 'Mixed (Under Lean)', 'Strong Under'];
+            let regHtml = '';
+            regSignals.forEach(sig => {
+                const matches = validResults.filter(r => r.regressionSignal === sig);
+                if (matches.length === 0) return;
+                const o25h = matches.filter(r => r.actualO25).length;
+                const rate = (o25h / matches.length * 100);
+                const cardClass = rate >= 60 ? 'hit' : rate <= 40 ? 'miss' : 'caution';
+                regHtml += `<div class="backtest-pattern-card ${cardClass}"><div class="backtest-pattern-header">${sig}</div><div class="backtest-pattern-stats"><div class="backtest-pattern-stat"><div class="backtest-pattern-stat-label">Matches</div><div class="backtest-pattern-stat-value">${matches.length}</div></div><div class="backtest-pattern-stat"><div class="backtest-pattern-stat-label">O2.5 Hits</div><div class="backtest-pattern-stat-value ${rate >= 60 ? 'green' : rate <= 40 ? 'red' : ''}">${o25h}</div></div><div class="backtest-pattern-stat"><div class="backtest-pattern-stat-label">O2.5 Rate</div><div class="backtest-pattern-stat-value ${rate >= 60 ? 'green' : rate <= 40 ? 'red' : ''}">${rate.toFixed(1)}%</div></div></div></div>`;
+            });
+            document.getElementById('backtestRegressionGrid').innerHTML = regHtml || '<div class="no-data-message">No data</div>';
+            // Z-Score Signal vs O2.5 actual
+            const zsSignals = ['Strong Over', 'Mixed (Over Lean)', 'Neutral', 'Mixed (Under Lean)', 'Strong Under'];
+            let zsHtml = '';
+            zsSignals.forEach(sig => {
+                const matches = validResults.filter(r => r.zScoreSignal === sig);
+                if (matches.length === 0) return;
+                const o25h = matches.filter(r => r.actualO25).length;
+                const rate = (o25h / matches.length * 100);
+                const cardClass = rate >= 60 ? 'hit' : rate <= 40 ? 'miss' : 'caution';
+                zsHtml += `<div class="backtest-pattern-card ${cardClass}"><div class="backtest-pattern-header">${sig}</div><div class="backtest-pattern-stats"><div class="backtest-pattern-stat"><div class="backtest-pattern-stat-label">Matches</div><div class="backtest-pattern-stat-value">${matches.length}</div></div><div class="backtest-pattern-stat"><div class="backtest-pattern-stat-label">O2.5 Hits</div><div class="backtest-pattern-stat-value ${rate >= 60 ? 'green' : rate <= 40 ? 'red' : ''}">${o25h}</div></div><div class="backtest-pattern-stat"><div class="backtest-pattern-stat-label">O2.5 Rate</div><div class="backtest-pattern-stat-value ${rate >= 60 ? 'green' : rate <= 40 ? 'red' : ''}">${rate.toFixed(1)}%</div></div></div></div>`;
+            });
+            document.getElementById('backtestZScoreGrid').innerHTML = zsHtml || '<div class="no-data-message">No data</div>';
+            // Sweet Spot criteria breakdown
+            const ssCriteriaNames = ['O1.5 Odds 1.06-1.15', 'BTTS Odds 1.30-1.50', 'O2.5 Prob 68-80%', 'No Clean Sheet', 'BTTS Medium', 'Regression Mixed (Over Lean)', 'Z-Score Neutral'];
+            let ssTableHtml = '<table class="backtest-confidence-table"><thead><tr><th>Criterion</th><th>Pass Rate</th><th>O2.5 Hit (Pass)</th><th>O2.5 Hit (Fail)</th><th>Difference</th></tr></thead><tbody>';
+            ssCriteriaNames.forEach((name, idx) => {
+                const passes = validResults.filter(r => r.sweetSpotCriteria[idx]);
+                const fails = validResults.filter(r => !r.sweetSpotCriteria[idx]);
+                const passRate = (passes.length / total * 100);
+                const passO25 = passes.length > 0 ? (passes.filter(r => r.actualO25).length / passes.length * 100) : 0;
+                const failO25 = fails.length > 0 ? (fails.filter(r => r.actualO25).length / fails.length * 100) : 0;
+                const diff = passO25 - failO25;
+                const diffBadge = diff >= 5 ? 'positive' : diff <= -5 ? 'negative' : 'neutral';
+                ssTableHtml += `<tr><td><strong>${name}</strong></td><td>${passRate.toFixed(1)}% (${passes.length})</td><td>${passO25.toFixed(1)}%</td><td>${failO25.toFixed(1)}%</td><td><span class="backtest-edge-badge ${diffBadge}">${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%</span></td></tr>`;
+            });
+            ssTableHtml += '</tbody></table>';
+            document.getElementById('backtestSweetSpotTable').innerHTML = ssTableHtml;
+            // Top repeating patterns - 2-criteria combos
+            const signalPairs = [
+                { name: 'Strong Over + BTTS Medium', check: r => r.regressionSignal === 'Strong Over' && r.bttsConf === 'Medium' },
+                { name: 'Strong Over + O2.5 68-80%', check: r => r.regressionSignal === 'Strong Over' && r.over25Prob >= 68 && r.over25Prob <= 80 },
+                { name: 'BTTS Medium + O2.5 68-80%', check: r => r.bttsConf === 'Medium' && r.over25Prob >= 68 && r.over25Prob <= 80 },
+                { name: 'Mixed (Over Lean) + BTTS Medium', check: r => r.regressionSignal === 'Mixed (Over Lean)' && r.bttsConf === 'Medium' },
+                { name: 'Neutral Z-Score + O2.5 68-80%', check: r => r.zScoreSignal === 'Neutral' && r.over25Prob >= 68 && r.over25Prob <= 80 },
+                { name: 'Strong Over + No CS + BTTS Medium', check: r => r.regressionSignal === 'Strong Over' && r.sweetSpotCriteria[3] && r.bttsConf === 'Medium' },
+                { name: 'O2.5 68-80% + BTTS Medium + No CS', check: r => r.over25Prob >= 68 && r.over25Prob <= 80 && r.bttsConf === 'Medium' && r.sweetSpotCriteria[3] },
+                { name: 'Any 5+ Sweet Spot criteria', check: r => r.sweetSpotCount >= 5 },
+                { name: 'Any 4+ Sweet Spot criteria', check: r => r.sweetSpotCount >= 4 },
+                { name: 'Any 3+ Sweet Spot criteria', check: r => r.sweetSpotCount >= 3 }
+            ];
+            let patternsHtml = '';
+            signalPairs.forEach(sp => {
+                const matches = validResults.filter(sp.check);
+                if (matches.length < 2) return;
+                const o25h = matches.filter(r => r.actualO25).length;
+                const bttsH = matches.filter(r => r.actualBTTS).length;
+                const o25Rate = (o25h / matches.length * 100);
+                const bttsRate = (bttsH / matches.length * 100);
+                const cardClass = o25Rate >= 65 ? 'hit' : o25Rate <= 45 ? 'miss' : 'caution';
+                patternsHtml += `<div class="backtest-pattern-card ${cardClass}"><div class="backtest-pattern-header">${sp.name}</div><div class="backtest-pattern-stats"><div class="backtest-pattern-stat"><div class="backtest-pattern-stat-label">Matches</div><div class="backtest-pattern-stat-value">${matches.length}</div></div><div class="backtest-pattern-stat"><div class="backtest-pattern-stat-label">O2.5 Rate</div><div class="backtest-pattern-stat-value ${o25Rate >= 65 ? 'green' : o25Rate <= 45 ? 'red' : ''}">${o25Rate.toFixed(1)}%</div></div><div class="backtest-pattern-stat"><div class="backtest-pattern-stat-label">BTTS Rate</div><div class="backtest-pattern-stat-value ${bttsRate >= 60 ? 'green' : bttsRate <= 40 ? 'red' : ''}">${bttsRate.toFixed(1)}%</div></div></div></div>`;
+            });
+            document.getElementById('backtestTopPatterns').innerHTML = patternsHtml || '<div class="no-data-message">Not enough data for pattern detection</div>';
+            // Individual match results
+            const sortedByProb = [...validResults].sort((a, b) => b.over25Prob - a.over25Prob);
+            let matchHtml = '';
+            sortedByProb.forEach(r => {
+                const m = r.match;
+                const o25Result = r.actualO25;
+                const bttsResult = r.actualBTTS;
+                matchHtml += `<div class="backtest-match-row">
+                    <span style="text-align:right;">${m.homeTeam}</span>
+                    <span style="font-weight:bold; padding:0 8px;">${m.homeScore} - ${m.awayScore}</span>
+                    <span>${m.awayTeam}</span>
+                    <span style="display:flex; gap:4px; justify-content:flex-end;">
+                        <span class="backtest-match-result ${o25Result ? 'hit' : 'miss'}">${o25Result ? 'O2.5' : 'U2.5'}</span>
+                        <span class="backtest-match-result ${bttsResult ? 'hit' : 'miss'}">${bttsResult ? 'BTTS' : 'NoBTTS'}</span>
+                        <span style="font-size:10px; color:#6c757d; padding:3px 6px;">${r.over25Prob.toFixed(0)}%</span>
+                        ${r.sweetSpotPasses ? '<span style="background:#FFD700; color:#1a1a1a; padding:2px 6px; border-radius:8px; font-size:9px; font-weight:bold;">SS</span>' : ''}
+                    </span>
+                </div>`;
+            });
+            document.getElementById('backtestMatchList').innerHTML = matchHtml;
+        }
+
+        function exportBacktestCSV() {
+            if (!lastBacktestResults || lastBacktestResults.length === 0) { alert('Run backtest first.'); return; }
+            let csv = 'data:text/csv;charset=utf-8,';
+            csv += 'Home Team,Away Team,Score,O2.5 Prob,O2.5 Actual,BTTS Prob,BTTS Actual,Regression Signal,Z-Score Signal,Sweet Spot Count,Sweet Spot Hit,O1.5 Odds,BTTS Odds,BTTS Confidence\n';
+            lastBacktestResults.forEach(r => {
+                csv += `"${r.match.homeTeam}","${r.match.awayTeam}","${r.match.homeScore}-${r.match.awayScore}",${r.over25Prob.toFixed(1)}%,${r.actualO25 ? 'YES' : 'NO'},${r.bttsProb.toFixed(1)}%,${r.actualBTTS ? 'YES' : 'NO'},${r.regressionSignal},${r.zScoreSignal},${r.sweetSpotCount},${r.sweetSpotPasses ? 'YES' : 'NO'},${r.o15Odds.toFixed(2)},${r.bttsOdds.toFixed(2)},${r.bttsConf}\n`;
+            });
+            const link = document.createElement('a'); link.setAttribute('href', encodeURI(csv));
+            link.setAttribute('download', `techmari_backtest_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
         }
     </script>
 </body>
