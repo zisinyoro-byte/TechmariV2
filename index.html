@@ -655,10 +655,10 @@
             let i = 0;
             while (i < lines.length) {
                 let line = lines[i];
-                // Skip known noise lines
-                if (SKIP_WORDS.includes(line)) { i++; continue; }
-                // Round headers
-                if (line.toLowerCase().startsWith("round") || line.includes("finals") || line.includes("group") || line.includes("1/")) { currentRound = line; i++; continue; }
+                // Skip known noise lines — clear any stale pendingDate
+                if (SKIP_WORDS.includes(line)) { pendingDate = null; i++; continue; }
+                // Round headers — clear stale pendingDate (date before a round header belongs to matches AFTER the round, not before)
+                if (line.toLowerCase().startsWith("round") || line.includes("finals") || line.includes("group") || line.includes("1/")) { currentRound = line; pendingDate = null; i++; continue; }
                 // Skip the league name line (already captured above)
                 if (line === currentLeague && globalMatches.length === 0 && !isValidDate(line)) { i++; continue; }
                 // Date lines: store as pending for the next match (handles date-BEFORE-teams format)
@@ -944,9 +944,23 @@
             runStrongBetChecklist();
         }
 
-        function getAllTeamMatches(team) { return globalMatches.filter(m => m.homeTeam === team || m.awayTeam === team); }
-        function getTeamLastNMatches(team, n) { return globalMatches.filter(m => m.homeTeam === team || m.awayTeam === team).slice(-n); }
-        function getH2HMatches(teamA, teamB) { return globalMatches.filter(m => (m.homeTeam === teamA && m.awayTeam === teamB) || (m.homeTeam === teamB && m.awayTeam === teamA)); }
+        // Sort helper: parses date strings like "17.04." or "10.04." into comparable values
+        // Format: DD.MM. — we parse as MM*100+DD for sorting (assumes same year)
+        function parseDateForSort(dateStr) {
+            const match = dateStr.match(/(\d+)\.(\d+)\./);
+            if (!match) return 0;
+            const day = parseInt(match[1]);
+            const month = parseInt(match[2]);
+            return month * 100 + day; // Sort by month first, then day
+        }
+
+        function sortMatchesByDate(matches) {
+            return [...matches].sort((a, b) => parseDateForSort(a.date) - parseDateForSort(b.date));
+        }
+
+        function getAllTeamMatches(team) { return sortMatchesByDate(globalMatches.filter(m => m.homeTeam === team || m.awayTeam === team)); }
+        function getTeamLastNMatches(team, n) { const sorted = sortMatchesByDate(globalMatches.filter(m => m.homeTeam === team || m.awayTeam === team)); return sorted.slice(-n); }
+        function getH2HMatches(teamA, teamB) { return sortMatchesByDate(globalMatches.filter(m => (m.homeTeam === teamA && m.awayTeam === teamB) || (m.homeTeam === teamB && m.awayTeam === teamA))); }
 
         function calculateTeamDeviation(team, teamMatches, h2hMatches, opponent) {
             if (teamMatches.length === 0) return { error: true, message: "No matches found" };
@@ -1037,7 +1051,10 @@
             if (matches.length < 3) return { error: true, message: "Insufficient data (minimum 3 matches required)", team: team };
             const goalsPerMatch = matches.map(m => m.homeTeam === team ? m.homeScore : m.awayScore);
             const sum = goalsPerMatch.reduce((a, b) => a + b, 0); const mean = sum / goalsPerMatch.length;
-            const variance = goalsPerMatch.map(g => Math.pow(g - mean, 2)).reduce((a, b) => a + b, 0) / goalsPerMatch.length;
+            // Use sample standard deviation (N-1) for small-sample correctness
+            // Population std dev (N) systematically underestimates spread with few matches,
+            // making Z-Scores appear larger than they really are (false "strong signals")
+            const variance = goalsPerMatch.length > 1 ? goalsPerMatch.map(g => Math.pow(g - mean, 2)).reduce((a, b) => a + b, 0) / (goalsPerMatch.length - 1) : 0;
             const stdDev = Math.sqrt(variance);
             const last3 = goalsPerMatch.slice(-3); const last3Avg = last3.reduce((a, b) => a + b, 0) / last3.length;
             let zScore = stdDev > 0 ? (last3Avg - mean) / stdDev : 0;
@@ -1309,7 +1326,8 @@
             if (teamMatches.length < 3) return { signal: 'neutral', zScore: 0 };
             const goalsPerMatch = teamMatches.map(m => m.homeTeam === team ? m.homeScore : m.awayScore);
             const mean = goalsPerMatch.reduce((a, b) => a + b, 0) / goalsPerMatch.length;
-            const variance = goalsPerMatch.map(g => Math.pow(g - mean, 2)).reduce((a, b) => a + b, 0) / goalsPerMatch.length;
+            // Use sample standard deviation (N-1) for small-sample correctness
+            const variance = goalsPerMatch.length > 1 ? goalsPerMatch.map(g => Math.pow(g - mean, 2)).reduce((a, b) => a + b, 0) / (goalsPerMatch.length - 1) : 0;
             const stdDev = Math.sqrt(variance);
             const last3 = goalsPerMatch.slice(-3); const last3Avg = last3.reduce((a, b) => a + b, 0) / last3.length;
             let zScore = stdDev > 0 ? (last3Avg - mean) / stdDev : 0;
