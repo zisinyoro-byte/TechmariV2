@@ -625,6 +625,7 @@
             const lines = rawInput.split('\n').map(l => l.trim()).filter(l => l.length > 0);
             let currentLeague = "Unknown";
             let currentRound = "Unknown";
+            const SKIP_WORDS = ["Summary", "Odds", "Fixtures", "Archive", "Standings", "Sport network:", "Advertisement", "AD", "Stay"];
             function isMerged(str) {
                 if (/\d/.test(str)) return false;
                 if (str.length < 4) return false;
@@ -633,31 +634,74 @@
                 return (str.substring(0, half).replace(/\s/g, '') === str.substring(half).replace(/\s/g, ''));
             }
             function unmerge(str) { return str.substring(0, Math.floor(str.length / 2)).trim(); }
+            function isScore(str) { return /^\d{1,2}$/.test(str) && parseInt(str) >= 0 && parseInt(str) <= 30; }
+
+            // Smart league detection: find the first non-date, non-round, non-noise, non-team-duplicate line
+            // This replaces the broken "i < 5" heuristic that consumed match data as league names
+            if (lines.length > 0) {
+                for (let j = 0; j < Math.min(lines.length, 10); j++) {
+                    let l = lines[j];
+                    if (SKIP_WORDS.includes(l)) continue;
+                    if (l.toLowerCase().startsWith("round") || l.includes("finals") || l.includes("group") || l.includes("1/")) break;
+                    if (isValidDate(l)) break;
+                    if (j + 1 < lines.length && l === lines[j+1]) break; // team duplicate pattern
+                    if (isMerged(l)) break;
+                    currentLeague = l;
+                    break;
+                }
+            }
+
+            let pendingDate = null;
             let i = 0;
             while (i < lines.length) {
                 let line = lines[i];
-                if (["Summary", "Odds", "Fixtures", "Archive", "Standings", "Sport network:", "Advertisement", "AD"].includes(line)) { i++; continue; }
+                // Skip known noise lines
+                if (SKIP_WORDS.includes(line)) { i++; continue; }
+                // Round headers
                 if (line.toLowerCase().startsWith("round") || line.includes("finals") || line.includes("group") || line.includes("1/")) { currentRound = line; i++; continue; }
-                if (i < 5) { currentLeague = line; i++; continue; }
+                // Skip the league name line (already captured above)
+                if (line === currentLeague && globalMatches.length === 0 && !isValidDate(line)) { i++; continue; }
+                // Date lines: store as pending for the next match (handles date-BEFORE-teams format)
+                if (isValidDate(line)) {
+                    pendingDate = line;
+                    i++;
+                    continue;
+                }
+                // Handle merged line format (e.g., "StjarnanStjarnan" on one line)
                 if (isMerged(line)) {
                     let homeTeam = unmerge(line); i++;
-                    while (i < lines.length && !isMerged(lines[i])) { if (lines[i].includes('.') && lines[i].length < 10) break; i++; }
+                    while (i < lines.length && !isMerged(lines[i])) { if (isValidDate(lines[i])) { pendingDate = lines[i]; } i++; }
                     if (i >= lines.length) break;
                     let awayTeam = unmerge(lines[i]); i++;
                     let scoreLine = lines[i]; let scoreStr = scoreLine.toString(); let mid = Math.floor(scoreStr.length / 2);
                     let hScore = scoreStr.substring(0, mid); let aScore = scoreStr.substring(mid); i++;
-                    let date = lines[i]; i++;
+                    // Date: use pending first (date-before format), otherwise check after score (date-after format)
+                    let date = "Unknown Date";
+                    if (pendingDate) { date = pendingDate; pendingDate = null; }
+                    else if (i < lines.length && isValidDate(lines[i])) { date = lines[i]; i++; }
                     if (isValidDate(date)) { globalMatches.push({ league: currentLeague, round: currentRound, date: date, homeTeam: homeTeam, awayTeam: awayTeam, homeScore: parseInt(hScore), awayScore: parseInt(aScore), notes: "Format 3" }); }
                     continue;
                 }
+                // Handle duplicate-line format
+                // Format A (date-first): [date], homeTeam, homeTeam, awayTeam, awayTeam, score1, score2
+                // Format B (date-last):  homeTeam, homeTeam, awayTeam, awayTeam, score1, score2, [date]
                 if (i + 1 < lines.length && line === lines[i+1]) {
                     let homeTeam = line; i += 2;
-                    if (i + 1 < lines.length) {
-                        let awayTeam = lines[i]; i += 2;
+                    if (i < lines.length) {
+                        let awayTeam;
+                        // Check if away team is also duplicated, or just a single line
+                        if (i + 1 < lines.length && lines[i] === lines[i+1]) {
+                            awayTeam = lines[i]; i += 2;
+                        } else {
+                            awayTeam = lines[i]; i++;
+                        }
                         let hScore = 0, aScore = 0, notes = "";
                         if (i < lines.length && lines[i] === "Pen") { notes = "Penalty Shootout"; i++; if (i < lines.length) hScore = lines[i]; if (i+1 < lines.length) aScore = lines[i+1]; i += 4; }
-                        else { if (i < lines.length) hScore = lines[i]; if (i+1 < lines.length) aScore = lines[i+1]; i += 2; }
-                        let date = "Unknown Date"; if (i < lines.length) { date = lines[i]; i++; }
+                        else { if (i < lines.length && isScore(lines[i])) { hScore = lines[i]; i++; } if (i < lines.length && isScore(lines[i])) { aScore = lines[i]; i++; } }
+                        // Date: use pending first (Format A: date-before-teams), otherwise check after scores (Format B: date-after-scores)
+                        let date = "Unknown Date";
+                        if (pendingDate) { date = pendingDate; pendingDate = null; }
+                        else if (i < lines.length && isValidDate(lines[i])) { date = lines[i]; i++; }
                         if (isValidDate(date)) { globalMatches.push({ league: currentLeague, round: currentRound, date: date, homeTeam: homeTeam, awayTeam: awayTeam, homeScore: parseInt(hScore), awayScore: parseInt(aScore), notes: notes }); }
                         continue;
                     }
