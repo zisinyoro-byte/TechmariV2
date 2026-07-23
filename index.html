@@ -687,7 +687,9 @@
                 // Format B (date-last):  homeTeam, homeTeam, awayTeam, awayTeam, score1, score2, [date]
                 if (i + 1 < lines.length && line === lines[i+1]) {
                     let homeTeam = line; i += 2;
-                    if (i < lines.length) {
+                    // Skip misplaced score numbers between home and away team names
+                    while (i < lines.length && isScore(lines[i])) { i++; }
+                    if (i < lines.length) {</arg_value><arg_key>old_str
                         let awayTeam;
                         // Check if away team is also duplicated, or just a single line
                         if (i + 1 < lines.length && lines[i] === lines[i+1]) {
