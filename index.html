@@ -87,6 +87,10 @@
         .prob-title { color: #6c757d; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
         .prob-value { font-size: 32px; font-weight: bold; color: #0056b3; margin: 5px 0; }
         .prob-sub { font-size: 13px; color: #6c757d; }
+        .xg-sos-delta { font-size: 10px; margin-left: 4px; }
+        .xg-sos-delta.sos-up { color: #28a745; }
+        .xg-sos-delta.sos-down { color: #dc3545; }
+        .xg-sos-delta.sos-flat { color: #adb5bd; }
         .score-probability { margin-top: 10px; font-size: 14px; color: #495057; border-top: 1px solid #dee2e6; padding-top: 10px; }
         .market-results { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 15px; }
         .market-box { background: #f8f9fa; padding: 12px; border-radius: 6px; text-align: center; border: 1px solid #e9ecef; }
@@ -130,6 +134,11 @@
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
         .no-data-message { text-align: center; color: #6c757d; font-style: italic; padding: 20px; }
         #attackWeakDefenseSection { background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e9ecef; margin-top: 20px; }
+        .awd-sos-label { font-size: 9px; margin-top: 3px; font-style: italic; letter-spacing: 0.3px; }
+        .awd-sos-label.sos-inflated { color: #dc3545; }
+        .awd-sos-label.sos-deflated { color: #28a745; }
+        .awd-sos-label.sos-neutral { color: #6c757d; }
+        .awd-raw-label { font-size: 9px; color: #adb5bd; margin-top: 1px; text-decoration: line-through; }
         .awd-team-card { background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%); border-radius: 8px; padding: 15px; margin-bottom: 12px; border-left: 4px solid #6f42c1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; }
         .awd-team-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         .awd-team-card.top-tier { border-left-color: #e83e8c; background: linear-gradient(135deg, #fff5f7 0%, #fff 100%); }
@@ -392,16 +401,17 @@
                 <button onclick="runPrediction()" class="btn-predict" style="max-width: 150px;">Predict</button>
             </div>
             <div id="predictionResults" class="hidden">
+                <div id="sosPredictionNote" style="text-align:center; margin-bottom:12px; font-size:11px; color:#6c757d; display:none;"></div>
                 <div class="results-grid">
                     <div class="prob-box">
                         <div class="prob-title">Home Win Probability</div>
                         <div class="prob-value" id="homeProb">0%</div>
-                        <div class="prob-sub">Expected Goals: <span id="homeXg">0.00</span></div>
+                        <div class="prob-sub">Expected Goals: <span id="homeXg">0.00</span> <span id="homeXgSOS" class="xg-sos-delta"></span></div>
                     </div>
                     <div class="prob-box">
                         <div class="prob-title">Away Win Probability</div>
                         <div class="prob-value" id="awayProb">0%</div>
-                        <div class="prob-sub">Expected Goals: <span id="awayXg">0.00</span></div>
+                        <div class="prob-sub">Expected Goals: <span id="awayXg">0.00</span> <span id="awayXgSOS" class="xg-sos-delta"></span></div>
                     </div>
                 </div>
                 <div class="prob-box" style="margin-top: 10px;">
@@ -450,8 +460,8 @@
         </div>
         <div id="attackWeakDefenseSection" class="hidden">
             <h3>Entertaining Teams (Strong Attack + Weak Defense)</h3>
-            <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Teams that score a lot but also concede - ideal for Over goals and BTTS markets</p>
-            <div class="awd-explanation"><p><strong>How it works:</strong> Teams with high attack rating (>1.0 means above league average) AND high defense rating (>1.0 means concede more than average) are highlighted.</p></div>
+            <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Teams that score a lot but also concede - ideal for Over goals and BTTS markets. Ratings are now <strong>SOS-adjusted</strong> to account for opposition strength.</p>
+            <div class="awd-explanation"><p><strong>How it works (v2 - SOS Adjusted):</strong> Attack and defense ratings are iteratively adjusted based on the quality of opponents faced. If a team scored heavily against weak defenses, their attack is <span style="color:#dc3545">deflated (inflated raw)</span>. If they scored against strong defenses, their attack is <span style="color:#28a745">boosted (deflated raw)</span>. <strong>Raw values</strong> are shown crossed out for comparison. Needs 4+ teams and 10+ matches for SOS to activate.</p></div>
             <div id="attackWeakDefenseContent"></div>
         </div>
         <div id="insightsSection" class="hidden">
@@ -767,13 +777,93 @@
                 teams[m.homeTeam].hGoals += m.homeScore; teams[m.homeTeam].hConc += m.awayScore; teams[m.homeTeam].hGames++;
                 teams[m.awayTeam].aGoals += m.awayScore; teams[m.awayTeam].aConc += m.homeScore; teams[m.awayTeam].aGames++;
             });
-            teamStats = {};
+            const leagueAvgGoals = (leagueHomeAvg + leagueAwayAvg) / 2;
+            // Step 1: Raw ratings (old behavior)
+            const rawStats = {};
             for (let t in teams) {
                 const data = teams[t]; const totalGames = (data.hGames + data.aGames) || 1;
                 const avgScored = (data.hGoals + data.aGoals) / totalGames; const avgConc = (data.hConc + data.aConc) / totalGames;
-                const leagueAvgGoals = (leagueHomeAvg + leagueAwayAvg) / 2;
-                teamStats[t] = { attack: (avgScored / leagueAvgGoals) || 1, defense: (avgConc / leagueAvgGoals) || 1, homeAdv: 1.05, avgScored: avgScored, avgConceded: avgConc, totalGames: totalGames };
+                rawStats[t] = { rawAttack: (avgScored / leagueAvgGoals) || 1, rawDefense: (avgConc / leagueAvgGoals) || 1, homeAdv: 1.05, avgScored: avgScored, avgConceded: avgConc, totalGames: totalGames };
             }
+            // Step 2: SOS-adjusted ratings via iterative algorithm
+            const sosRatings = iterativeSOSAdjustment(globalMatches, rawStats, leagueAvgGoals);
+            // Step 3: Merge into final teamStats
+            teamStats = {};
+            for (let t in rawStats) {
+                const raw = rawStats[t]; const sos = sosRatings[t];
+                teamStats[t] = { attack: sos.attack, defense: sos.defense, rawAttack: raw.rawAttack, rawDefense: raw.rawDefense, sosAttackDelta: sos.attack - raw.rawAttack, sosDefenseDelta: sos.defense - raw.rawDefense, homeAdv: raw.homeAdv, avgScored: raw.avgScored, avgConceded: raw.avgConceded, totalGames: raw.totalGames };
+            }
+        }
+
+        /**
+         * Iterative Strength-of-Schedule Adjustment
+         * 
+         * Concept: A team's raw attack rating is biased by the quality of defenses they faced.
+         * If Team A scores 3.0/g but only played weak defenses, their attack is INFLATED.
+         * This algorithm iteratively adjusts each team's attack and defense by weighting
+         * their raw performance against the CURRENT ESTIMATE of their opponents' ratings.
+         * After ~20 iterations, ratings stabilize to true opponent-adjusted values.
+         * 
+         * Formula per iteration:
+         *   adjustedAttack(t) = rawAttack(t) / avg(opponentDefenseRating for all t's matches)
+         *   adjustedDefense(t) = rawDefense(t) / avg(opponentAttackRating for all t's matches)
+         * 
+         * A value > 1 still means above average, but now it accounts for WHO they played.
+         */
+        function iterativeSOSAdjustment(matches, rawStats, leagueAvgGoals) {
+            const teamNames = Object.keys(rawStats);
+            if (teamNames.length < 4 || matches.length < 10) {
+                // Not enough data for reliable SOS — fall back to raw
+                const result = {};
+                teamNames.forEach(t => { result[t] = { attack: rawStats[t].rawAttack, defense: rawStats[t].rawDefense }; });
+                return result;
+            }
+            // Build per-team opponent lists from match data
+            const teamOpponents = {};
+            teamNames.forEach(t => { teamOpponents[t] = { oppDefRatings: [], oppAttRatings: [] }; });
+            matches.forEach(m => {
+                if (teamOpponents[m.homeTeam] && teamOpponents[m.awayTeam]) {
+                    teamOpponents[m.homeTeam].oppDefRatings.push(m.awayTeam);
+                    teamOpponents[m.awayTeam].oppDefRatings.push(m.homeTeam);
+                    teamOpponents[m.homeTeam].oppAttRatings.push(m.awayTeam);
+                    teamOpponents[m.awayTeam].oppAttRatings.push(m.homeTeam);
+                }
+            });
+            // Initialize adjusted = raw
+            let currentAttack = {}; let currentDefense = {};
+            teamNames.forEach(t => { currentAttack[t] = rawStats[t].rawAttack; currentDefense[t] = rawStats[t].rawDefense; });
+            // Iterate until convergence (max 30 iterations)
+            const MAX_ITER = 30;
+            const CONVERGENCE_THRESHOLD = 0.001;
+            for (let iter = 0; iter < MAX_ITER; iter++) {
+                let maxChange = 0;
+                const newAttack = {}; const newDefense = {};
+                teamNames.forEach(t => {
+                    const opps = teamOpponents[t];
+                    // Average opponent defense rating faced by this team
+                    const avgOppDef = opps.oppDefRatings.length > 0
+                        ? opps.oppDefRatings.map(opp => currentDefense[opp]).reduce((a, b) => a + b, 0) / opps.oppDefRatings.length
+                        : 1.0;
+                    // Average opponent attack rating faced by this team
+                    const avgOppAtt = opps.oppAttRatings.length > 0
+                        ? opps.oppAttRatings.map(opp => currentAttack[opp]).reduce((a, b) => a + b, 0) / opps.oppAttRatings.length
+                        : 1.0;
+                    // Adjust: if you faced strong defenses (avgOppDef < 1), your attack should be boosted
+                    // If you faced weak defenses (avgOppDef > 1), your attack should be reduced
+                    newAttack[t] = rawStats[t].rawAttack / avgOppDef;
+                    // If you faced strong attacks (avgOppAtt > 1), your defense should be boosted (lower is better)
+                    // If you faced weak attacks (avgOppAtt < 1), your defense should be penalized
+                    newDefense[t] = rawStats[t].rawDefense / avgOppAtt;
+                    // Track convergence
+                    maxChange = Math.max(maxChange, Math.abs(newAttack[t] - currentAttack[t]), Math.abs(newDefense[t] - currentDefense[t]));
+                });
+                currentAttack = newAttack; currentDefense = newDefense;
+                if (maxChange < CONVERGENCE_THRESHOLD) break; // Converged
+            }
+            // Build result
+            const result = {};
+            teamNames.forEach(t => { result[t] = { attack: currentAttack[t], defense: currentDefense[t] }; });
+            return result;
         }
 
         function calculateLeagueInsights() {
@@ -829,6 +919,9 @@
             const leagueAwayAvg = globalMatches.reduce((a, b) => a + b.awayScore, 0) / globalMatches.length;
             const lambdaHome = hStats.attack * aStats.defense * leagueHomeAvg * hStats.homeAdv;
             const lambdaAway = aStats.attack * hStats.defense * leagueAwayAvg;
+            // Calculate what raw (unadjusted) xG would have been for comparison
+            const rawLambdaHome = hStats.rawAttack * aStats.rawDefense * leagueHomeAvg * hStats.homeAdv;
+            const rawLambdaAway = aStats.rawAttack * hStats.rawDefense * leagueAwayAvg;
             let homeWins = 0, draws = 0, awayWins = 0, over25Count = 0, over35Count = 0, bttsCount = 0, over15Count = 0;
             const iterations = 100000; const scoreCounts = {};
             for (let i = 0; i < iterations; i++) {
@@ -845,6 +938,22 @@
             document.getElementById('drawProb').innerText = ((draws / iterations) * 100).toFixed(1) + "%";
             document.getElementById('awayProb').innerText = ((awayWins / iterations) * 100).toFixed(1) + "%";
             document.getElementById('homeXg').innerText = lambdaHome.toFixed(2); document.getElementById('awayXg').innerText = lambdaAway.toFixed(2);
+            // Show SOS adjustment delta on xG
+            function renderSOSDelta(elId, sosVal, rawVal) {
+                const el = document.getElementById(elId); const diff = sosVal - rawVal;
+                if (Math.abs(diff) < 0.03) { el.className = 'xg-sos-delta sos-flat'; el.innerText = '(SOS: ~0)'; }
+                else if (diff > 0) { el.className = 'xg-sos-delta sos-up'; el.innerText = `(SOS: +${diff.toFixed(2)})`; }
+                else { el.className = 'xg-sos-delta sos-down'; el.innerText = `(SOS: ${diff.toFixed(2)})`; }
+            }
+            renderSOSDelta('homeXgSOS', lambdaHome, rawLambdaHome);
+            renderSOSDelta('awayXgSOS', lambdaAway, rawLambdaAway);
+            // Show SOS note banner
+            const sosNote = document.getElementById('sosPredictionNote');
+            const hDelta = hStats.sosAttackDelta || 0; const aDelta = aStats.sosAttackDelta || 0;
+            const homeSOSDesc = Math.abs(hDelta) < 0.03 ? 'neutral SOS' : hDelta > 0 ? `attack inflated by easy schedule (+${hDelta.toFixed(2)})` : `attack boosted by hard schedule (${hDelta.toFixed(2)})`;
+            const awaySOSDesc = Math.abs(aDelta) < 0.03 ? 'neutral SOS' : aDelta > 0 ? `attack inflated by easy schedule (+${aDelta.toFixed(2)})` : `attack boosted by hard schedule (${aDelta.toFixed(2)})`;
+            sosNote.style.display = 'block';
+            sosNote.innerHTML = `<strong>SOS Adjustment:</strong> ${homeTeam}: ${homeSOSDesc} | ${awayTeam}: ${awaySOSDesc}`;
             document.getElementById('likelyScore').innerText = `${likelyScore} (${((maxFreq/iterations)*100).toFixed(1)}%)`;
             document.getElementById('over25Prob').innerText = over25Prob.toFixed(1) + "%"; document.getElementById('over35Prob').innerText = over35Prob.toFixed(1) + "%";
             document.getElementById('bttsProb').innerText = bttsProb.toFixed(1) + "%";
@@ -915,7 +1024,7 @@
 
         function calculateAttackWeakDefenseTeams() {
             const awdTeams = [];
-            for (let team in teamStats) { const s = teamStats[team]; if (s.attack > 1.0 && s.defense > 1.0 && s.totalGames >= 3) awdTeams.push({ team, attack: s.attack, defense: s.defense, avgScored: s.avgScored, avgConceded: s.avgConceded, totalGames: s.totalGames, combinedScore: s.attack + s.defense }); }
+            for (let team in teamStats) { const s = teamStats[team]; if (s.attack > 1.0 && s.defense > 1.0 && s.totalGames >= 3) awdTeams.push({ team, attack: s.attack, defense: s.defense, rawAttack: s.rawAttack, rawDefense: s.rawDefense, sosAttackDelta: s.sosAttackDelta, sosDefenseDelta: s.sosDefenseDelta, avgScored: s.avgScored, avgConceded: s.avgConceded, totalGames: s.totalGames, combinedScore: s.attack + s.defense }); }
             awdTeams.sort((a, b) => b.combinedScore - a.combinedScore); renderAttackWeakDefenseTeams(awdTeams.slice(0, 10));
         }
 
@@ -923,7 +1032,16 @@
             const container = document.getElementById('attackWeakDefenseContent');
             if (teams.length === 0) { container.innerHTML = '<div class="no-data-message">No teams with strong attack and weak defense found.</div>'; return; }
             const maxA = Math.max(...teams.map(t => t.attack)); const maxD = Math.max(...teams.map(t => t.defense));
-            container.innerHTML = teams.map((t, idx) => { const isTop = idx < 3; return `<div class="awd-team-card ${isTop ? 'top-tier' : ''}"><div class="awd-team-header"><span class="awd-team-name">${idx + 1}. ${t.team}${isTop ? '<span class="highlight-badge">HOT</span>' : ''}</span><span class="awd-score-badge ${isTop ? 'hot' : ''}">Score: ${t.combinedScore.toFixed(2)}</span></div><div class="awd-stats-row"><div class="awd-stat-item"><div class="awd-stat-label">Attack</div><div class="awd-stat-value good">${t.attack.toFixed(2)}</div></div><div class="awd-stat-item"><div class="awd-stat-label">Defense</div><div class="awd-stat-value bad">${t.defense.toFixed(2)}</div></div><div class="awd-stat-item"><div class="awd-stat-label">Avg Scored</div><div class="awd-stat-value purple">${t.avgScored.toFixed(2)}</div></div><div class="awd-stat-item"><div class="awd-stat-label">Avg Conceded</div><div class="awd-stat-value bad">${t.avgConceded.toFixed(2)}</div></div></div><div class="awd-meter"><span class="awd-meter-label">Attack Power</span><div class="awd-meter-bar"><div class="awd-meter-fill attack" style="width: ${(t.attack / maxA) * 100}%"></div></div></div><div class="awd-meter"><span class="awd-meter-label">Defensive Leak</span><div class="awd-meter-bar"><div class="awd-meter-fill defense" style="width: ${(t.defense / maxD) * 100}%"></div></div></div></div>`; }).join('');
+            container.innerHTML = teams.map((t, idx) => { 
+                const isTop = idx < 3;
+                const attDelta = t.sosAttackDelta || 0;
+                const defDelta = t.sosDefenseDelta || 0;
+                const attSOSLabel = Math.abs(attDelta) < 0.03 ? '(SOS: neutral)' : attDelta > 0 ? `(SOS: +${attDelta.toFixed(2)} vs weak opps)` : `(SOS: ${attDelta.toFixed(2)} vs strong opps)`;
+                const defSOSLabel = Math.abs(defDelta) < 0.03 ? '(SOS: neutral)' : defDelta > 0 ? `(SOS: +${defDelta.toFixed(2)} vs weak atts)` : `(SOS: ${defDelta.toFixed(2)} vs strong atts)`;
+                const attSOSClass = attDelta > 0.05 ? 'sos-inflated' : attDelta < -0.05 ? 'sos-deflated' : 'sos-neutral';
+                const defSOSClass = defDelta > 0.05 ? 'sos-inflated' : defDelta < -0.05 ? 'sos-deflated' : 'sos-neutral';
+                return `<div class="awd-team-card ${isTop ? 'top-tier' : ''}"><div class="awd-team-header"><span class="awd-team-name">${idx + 1}. ${t.team}${isTop ? '<span class="highlight-badge">HOT</span>' : ''}</span><span class="awd-score-badge ${isTop ? 'hot' : ''}">Score: ${t.combinedScore.toFixed(2)}</span></div><div class="awd-stats-row"><div class="awd-stat-item"><div class="awd-stat-label">Attack (SOS)</div><div class="awd-stat-value good">${t.attack.toFixed(2)}</div><div class="awd-sos-label ${attSOSClass}">${attSOSLabel}</div><div class="awd-raw-label">Raw: ${t.rawAttack.toFixed(2)}</div></div><div class="awd-stat-item"><div class="awd-stat-label">Defense (SOS)</div><div class="awd-stat-value bad">${t.defense.toFixed(2)}</div><div class="awd-sos-label ${defSOSClass}">${defSOSLabel}</div><div class="awd-raw-label">Raw: ${t.rawDefense.toFixed(2)}</div></div><div class="awd-stat-item"><div class="awd-stat-label">Avg Scored</div><div class="awd-stat-value purple">${t.avgScored.toFixed(2)}</div></div><div class="awd-stat-item"><div class="awd-stat-label">Avg Conceded</div><div class="awd-stat-value bad">${t.avgConceded.toFixed(2)}</div></div></div><div class="awd-meter"><span class="awd-meter-label">Attack Power</span><div class="awd-meter-bar"><div class="awd-meter-fill attack" style="width: ${(t.attack / maxA) * 100}%"></div></div></div><div class="awd-meter"><span class="awd-meter-label">Defensive Leak</span><div class="awd-meter-bar"><div class="awd-meter-fill defense" style="width: ${(t.defense / maxD) * 100}%"></div></div></div></div>`; 
+            }).join('');
         }
 
         function setDeviationPeriod(period) {
@@ -1227,18 +1345,26 @@
             const teams = {};
             const leagueHomeAvg = matches.reduce((a, b) => a + b.homeScore, 0) / matches.length;
             const leagueAwayAvg = matches.reduce((a, b) => a + b.awayScore, 0) / matches.length;
+            const leagueAvgGoals = (leagueHomeAvg + leagueAwayAvg) / 2;
             matches.forEach(m => {
                 if (!teams[m.homeTeam]) teams[m.homeTeam] = { hGoals: 0, aGoals: 0, hConc: 0, aConc: 0, hGames: 0, aGames: 0 };
                 if (!teams[m.awayTeam]) teams[m.awayTeam] = { hGoals: 0, aGoals: 0, hConc: 0, aConc: 0, hGames: 0, aGames: 0 };
                 teams[m.homeTeam].hGoals += m.homeScore; teams[m.homeTeam].hConc += m.awayScore; teams[m.homeTeam].hGames++;
                 teams[m.awayTeam].aGoals += m.awayScore; teams[m.awayTeam].aConc += m.homeScore; teams[m.awayTeam].aGames++;
             });
-            const stats = {};
+            // Build raw stats
+            const rawStats = {};
             for (let t in teams) {
                 const d = teams[t]; const totalGames = (d.hGames + d.aGames) || 1;
                 const avgScored = (d.hGoals + d.aGoals) / totalGames; const avgConc = (d.hConc + d.aConc) / totalGames;
-                const leagueAvgGoals = (leagueHomeAvg + leagueAwayAvg) / 2;
-                stats[t] = { attack: (avgScored / leagueAvgGoals) || 1, defense: (avgConc / leagueAvgGoals) || 1, homeAdv: 1.05, avgScored, avgConceded: avgConc, totalGames };
+                rawStats[t] = { rawAttack: (avgScored / leagueAvgGoals) || 1, rawDefense: (avgConc / leagueAvgGoals) || 1, homeAdv: 1.05, avgScored, avgConceded: avgConc, totalGames };
+            }
+            // Apply SOS adjustment
+            const sosRatings = iterativeSOSAdjustment(matches, rawStats, leagueAvgGoals);
+            const stats = {};
+            for (let t in rawStats) {
+                const r = rawStats[t]; const s = sosRatings[t];
+                stats[t] = { attack: s.attack, defense: s.defense, rawAttack: r.rawAttack, rawDefense: r.rawDefense, homeAdv: r.homeAdv, avgScored: r.avgScored, avgConceded: r.avgConceded, totalGames: r.totalGames };
             }
             return { stats, leagueHomeAvg, leagueAwayAvg };
         }
