@@ -291,6 +291,43 @@
         .sweet-spot-criteria-item { font-size: 11px; padding: 4px 8px; border-radius: 4px; display: flex; align-items: center; gap: 5px; }
         .sweet-spot-criteria-item.pass { background: rgba(40, 167, 69, 0.15); color: #155724; }
         .sweet-spot-criteria-item.fail { background: rgba(220, 53, 69, 0.1); color: #721c24; }
+        /* Market Recommendation & Kelly Styles */
+        .odds-input-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 15px 0; }
+        @media (max-width: 600px) { .odds-input-row { grid-template-columns: repeat(2, 1fr); } }
+        .odds-input-group { text-align: center; }
+        .odds-input-group label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #6c757d; margin-bottom: 4px; display: block; }
+        .odds-input-group input { width: 100%; padding: 8px; text-align: center; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px; font-weight: 600; box-sizing: border-box; transition: border 0.3s; }
+        .odds-input-group input:focus { outline: none; border-color: #0056b3; box-shadow: 0 0 0 2px rgba(0,86,179,0.15); }
+        .odds-input-group input::placeholder { color: #adb5bd; font-weight: 400; font-size: 11px; }
+        #marketRecSection { background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e9ecef; margin-top: 20px; }
+        .kelly-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 15px; }
+        .kelly-table th { background: #f8f9fa; padding: 10px; text-align: left; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .kelly-table td { padding: 10px; border-bottom: 1px solid #e9ecef; color: #495057; }
+        .kelly-table tr:hover { background: #f8f9fa; }
+        .kelly-table .best-row { background: linear-gradient(90deg, #d4edda 0%, #ffffff 100%); font-weight: 600; }
+        .kelly-table .no-edge { opacity: 0.5; }
+        .kelly-positive { color: #28a745; font-weight: bold; }
+        .kelly-negative { color: #dc3545; }
+        .kelly-zero { color: #6c757d; }
+        .rec-banner { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border-radius: 12px; padding: 20px; color: white; text-align: center; border: 2px solid #28a745; box-shadow: 0 4px 15px rgba(40,167,69,0.2); margin-bottom: 15px; }
+        .rec-banner.no-value { border-color: #6c757d; box-shadow: none; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); color: #495057; }
+        .rec-banner-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #adb5bd; margin-bottom: 8px; }
+        .rec-banner.no-value .rec-banner-title { color: #6c757d; }
+        .rec-banner-market { font-size: 22px; font-weight: bold; color: #FFD700; margin-bottom: 5px; }
+        .rec-banner.no-value .rec-banner-market { color: #6c757d; font-size: 16px; }
+        .rec-banner-stake { font-size: 14px; color: #28a745; margin-bottom: 5px; }
+        .rec-banner.no-value .rec-banner-stake { color: #6c757d; }
+        .rec-banner-detail { font-size: 11px; color: #adb5bd; }
+        .rec-banner.no-value .rec-banner-detail { color: #6c757d; }
+        .kelly-explanation { background: #f8f9fa; border-radius: 6px; padding: 12px; margin-bottom: 15px; border: 1px dashed #ced4da; }
+        .kelly-explanation p { text-align: left; font-size: 12px; color: #6c757d; margin: 0; line-height: 1.6; }
+        .edge-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
+        .edge-badge.positive { background: #d4edda; color: #155724; }
+        .edge-badge.negative { background: #f8d7da; color: #721c24; }
+        .edge-badge.zero { background: #e9ecef; color: #6c757d; }
+        .stake-bar-container { width: 100%; height: 8px; background: #e9ecef; border-radius: 4px; margin-top: 4px; overflow: hidden; }
+        .stake-bar { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
+        .stake-bar.positive { background: linear-gradient(90deg, #28a745, #20c997); }
         /* Backtest Mode Styles */
         #backtestSection { background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e9ecef; margin-top: 20px; }
         .backtest-explanation { background: #f8f9fa; border-radius: 6px; padding: 12px; margin-bottom: 15px; border: 1px dashed #ced4da; }
@@ -400,6 +437,24 @@
                 </div>
                 <button onclick="runPrediction()" class="btn-predict" style="max-width: 150px;">Predict</button>
             </div>
+            <div class="odds-input-row">
+                <div class="odds-input-group">
+                    <label>O1.5 Odds (optional)</label>
+                    <input type="number" id="oddsO15" placeholder="e.g. 1.12" step="0.01" min="1.01" max="50">
+                </div>
+                <div class="odds-input-group">
+                    <label>O2.5 Odds (optional)</label>
+                    <input type="number" id="oddsO25" placeholder="e.g. 1.55" step="0.01" min="1.01" max="50">
+                </div>
+                <div class="odds-input-group">
+                    <label>O3.5 Odds (optional)</label>
+                    <input type="number" id="oddsO35" placeholder="e.g. 2.30" step="0.01" min="1.01" max="50">
+                </div>
+                <div class="odds-input-group">
+                    <label>BTTS Odds (optional)</label>
+                    <input type="number" id="oddsBTTS" placeholder="e.g. 1.70" step="0.01" min="1.01" max="50">
+                </div>
+            </div>
             <div id="predictionResults" class="hidden">
                 <div id="sosPredictionNote" style="text-align:center; margin-bottom:12px; font-size:11px; color:#6c757d; display:none;"></div>
                 <div class="results-grid">
@@ -436,10 +491,17 @@
                 <div style="margin-top: 15px; text-align: center;">
                     <div id="sweetSpotBadge" class="sweet-spot-badge miss" style="display:none;">SWEET SPOT: --</div>
                 </div>
+                <div id="kellyRecContainer" style="display:none; margin-top: 15px;"></div>
                 <div style="margin-top: 15px; text-align: center;">
                     <button id="exportPredictionBtn" onclick="exportPredictionCSV()" class="btn-export" disabled>Export Prediction CSV</button>
                 </div>
             </div>
+        </div>
+        <div id="marketRecSection" class="hidden">
+            <h3>Market Recommendation (Quarter Kelly)</h3>
+            <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Enter bookmaker odds above, then predict. The system identifies which market offers the best value using the Kelly Criterion.</p>
+            <div class="kelly-explanation"><p><strong>How it works:</strong> The Kelly Criterion calculates optimal stake sizing based on your edge. <strong>Edge = Model Probability - Bookmaker Implied Probability</strong>. If your model says 72% but the bookmaker implies 65% (odds 1.54), you have a +7% edge. Full Kelly = (bp - q) / b where b = odds-1, p = your prob, q = 1-p. <strong>Quarter Kelly</strong> (25% of full Kelly) is used for bankroll management — it dramatically reduces variance while still capturing most of the long-term growth. A market needs positive edge to warrant any bet.</p></div>
+            <div id="kellyResults"></div>
         </div>
         <div id="strongBetSection" class="hidden">
             <h3>Strong Bet Checklist</h3>
@@ -765,6 +827,7 @@
             document.getElementById('zScoreSection').classList.remove('hidden');
             document.getElementById('strongBetSection').classList.remove('hidden');
             document.getElementById('backtestSection').classList.remove('hidden');
+            document.getElementById('marketRecSection').classList.remove('hidden');
         }
 
         function calculateTeamStats() {
@@ -963,7 +1026,7 @@
             document.getElementById('bttsProb').innerText = bttsProb.toFixed(1) + "%";
             document.getElementById('predictionResults').classList.remove('hidden'); document.getElementById('exportPredictionBtn').disabled = false;
             lastPredictionData = { homeTeam, awayTeam, homeWinProb: ((homeWins / iterations) * 100), drawProb: ((draws / iterations) * 100), awayWinProb: ((awayWins / iterations) * 100), homeXg: lambdaHome, awayXg: lambdaAway, likelyScore, likelyScoreProb: ((maxFreq/iterations)*100), over15Prob, over25Prob, over35Prob, bttsProb };
-            runDeviationAnalysis(homeTeam, awayTeam); runZScoreAnalysis(homeTeam, awayTeam); evaluateSweetSpot();
+            runDeviationAnalysis(homeTeam, awayTeam); runZScoreAnalysis(homeTeam, awayTeam); evaluateSweetSpot(); renderMarketRecommendation(lastPredictionData);
         }
 
         function getPoisson(lambda) { const L = Math.exp(-lambda); let k = 0, p = 1; do { k++; p *= Math.random(); } while (p > L); return k - 1; }
@@ -1220,6 +1283,129 @@
         }
 
         function getZScoreCombinedLabel(signal) { switch(signal) { case 'strong-over': return 'Strong Over'; case 'strong-under': return 'Strong Under'; case 'mixed-over-lean': return 'Mixed (Over Lean)'; case 'mixed-under-lean': return 'Mixed (Under Lean)'; default: return 'Neutral'; } }
+
+        // ==================== QUARTER KELLY MARKET RECOMMENDATION ====================
+        /**
+         * Quarter Kelly Criterion for stake sizing.
+         * 
+         * Full Kelly:  f* = (b*p - q) / b
+         *   where b = decimal odds - 1 (net payout per unit staked)
+         *         p = your model's probability of winning
+         *         q = 1 - p
+         *   If f* > 0, there is positive expected value.
+         * 
+         * Quarter Kelly = f* / 4
+         *   More conservative than full Kelly — reduces variance significantly
+         *   while still capturing ~75% of the long-term growth rate.
+         *   Recommended by most professional bettors for practical use.
+         */
+        function calculateQuarterKelly(modelProb, bookmakerOdds) {
+            const p = modelProb / 100;
+            const q = 1 - p;
+            const b = bookmakerOdds - 1; // net payout ratio
+            const impliedProb = 1 / bookmakerOdds;
+            const edge = (p - impliedProb) * 100; // edge in percentage points
+            const fullKelly = (b * p - q) / b;
+            const quarterKelly = fullKelly / 4;
+            // Expected value per unit staked: p*b - q
+            const evPerUnit = p * b - q;
+            return {
+                modelProb: modelProb,
+                bookmakerOdds: bookmakerOdds,
+                impliedProb: impliedProb * 100,
+                edge: edge, // percentage points
+                fullKelly: Math.max(fullKelly, 0),
+                quarterKelly: Math.max(quarterKelly, 0),
+                evPerUnit: evPerUnit,
+                hasEdge: edge > 0,
+                hasOdds: true
+            };
+        }
+
+        function calculateKellyWithoutOdds(modelProb) {
+            // No odds provided — show model probability with fair odds
+            const fairOdds = modelProb > 0 ? (100 / modelProb) : 0;
+            return {
+                modelProb: modelProb,
+                bookmakerOdds: null,
+                impliedProb: modelProb,
+                edge: 0,
+                fullKelly: 0,
+                quarterKelly: 0,
+                evPerUnit: 0,
+                hasEdge: false,
+                hasOdds: false,
+                fairOdds: fairOdds
+            };
+        }
+
+        function renderMarketRecommendation(pred) {
+            const container = document.getElementById('kellyResults');
+            const inlineContainer = document.getElementById('kellyRecContainer');
+            // Read odds from inputs
+            const oddsO15 = parseFloat(document.getElementById('oddsO15').value) || null;
+            const oddsO25 = parseFloat(document.getElementById('oddsO25').value) || null;
+            const oddsO35 = parseFloat(document.getElementById('oddsO35').value) || null;
+            const oddsBTTS = parseFloat(document.getElementById('oddsBTTS').value) || null;
+            const hasAnyOdds = oddsO15 || oddsO25 || oddsO35 || oddsBTTS;
+            // Build market data
+            const markets = [
+                { name: 'Over 1.5 Goals', shortName: 'O1.5', prob: pred.over15Prob, odds: oddsO15 },
+                { name: 'Over 2.5 Goals', shortName: 'O2.5', prob: pred.over25Prob, odds: oddsO25 },
+                { name: 'Over 3.5 Goals', shortName: 'O3.5', prob: pred.over35Prob, odds: oddsO35 },
+                { name: 'BTTS (Yes)', shortName: 'BTTS', prob: pred.bttsProb, odds: oddsBTTS }
+            ];
+            // Calculate Kelly for each
+            const kellyData = markets.map(m => {
+                if (m.odds && m.odds >= 1.01) {
+                    return { ...m, kelly: calculateQuarterKelly(m.prob, m.odds) };
+                } else {
+                    return { ...m, kelly: calculateKellyWithoutOdds(m.prob) };
+                }
+            });
+            // Sort by quarter Kelly descending (best value first)
+            const ranked = [...kellyData].sort((a, b) => b.kelly.quarterKelly - a.kelly.quarterKelly);
+            const best = ranked[0];
+            const bestHasEdge = best.kelly.hasEdge;
+            // Render inline quick-rec in prediction results
+            if (hasAnyOdds && bestHasEdge) {
+                inlineContainer.style.display = 'block';
+                inlineContainer.innerHTML = `<div style="background: linear-gradient(135deg, #d4edda 0%, #fff 100%); padding: 12px; border-radius: 8px; border: 1px solid #28a745; text-align: center;"><span style="font-size:11px; color:#155724; text-transform:uppercase; letter-spacing:1px; font-weight:600;">Best Market</span><div style="font-size:18px; font-weight:bold; color:#155724; margin:4px 0;">${best.name} @ ${best.kelly.bookmakerOdds.toFixed(2)}</div><div style="font-size:12px; color:#495057;">Quarter Kelly: <strong>${(best.kelly.quarterKelly * 100).toFixed(2)}%</strong> of bankroll | Edge: <strong style="color:#155724;">+${best.kelly.edge.toFixed(1)}pp</strong></div></div>`;
+            } else {
+                inlineContainer.style.display = 'none';
+            }
+            // Render full section
+            if (!hasAnyOdds) {
+                container.innerHTML = `<div style="text-align:center; padding:20px; color:#6c757d;"><p style="font-size:14px; margin-bottom:8px;">Enter bookmaker odds above to enable Kelly analysis.</p><p style="font-size:12px;">Without odds, the model probabilities alone cannot identify value bets. The Kelly Criterion needs both your estimated probability AND the bookmaker's odds to calculate edge and optimal stake.</p></div>`;
+                return;
+            }
+            // Build banner
+            let bannerHtml = '';
+            if (bestHasEdge) {
+                bannerHtml = `<div class="rec-banner"><div class="rec-banner-title">Recommended Market</div><div class="rec-banner-market">${best.name}</div><div class="rec-banner-stake">Quarter Kelly Stake: ${(best.kelly.quarterKelly * 100).toFixed(2)}% of bankroll</div><div class="rec-banner-detail">Edge: +${best.kelly.edge.toFixed(1)}pp | Model: ${best.kelly.modelProb.toFixed(1)}% vs Implied: ${best.kelly.impliedProb.toFixed(1)}% | Odds: ${best.kelly.bookmakerOdds.toFixed(2)}</div></div>`;
+            } else {
+                bannerHtml = `<div class="rec-banner no-value"><div class="rec-banner-title">No Value Found</div><div class="rec-banner-market">No market has positive edge at current odds</div><div class="rec-banner-stake">Quarter Kelly Stake: 0% — Do not bet</div><div class="rec-banner-detail">The bookmaker's odds are equal to or tighter than your model's probabilities. Consider passing on this match.</div></div>`;
+            }
+            // Build table
+            const maxQK = Math.max(...kellyData.map(d => d.kelly.quarterKelly), 0.01);
+            let tableHtml = '<table class="kelly-table"><thead><tr><th>Market</th><th>Model %</th><th>Odds</th><th>Implied %</th><th>Edge</th><th>Quarter Kelly</th><th>EV/Unit</th></tr></thead><tbody>';
+            kellyData.forEach(d => {
+                const k = d.kelly;
+                const isBest = d.shortName === best.shortName;
+                const rowClass = isBest && k.hasEdge ? 'best-row' : (!k.hasEdge ? 'no-edge' : '');
+                const edgeClass = k.edge > 0 ? 'positive' : k.edge < -1 ? 'negative' : 'zero';
+                const edgeBadge = k.edge > 0 ? `positive` : k.edge < -1 ? `negative` : 'zero';
+                const edgeText = k.edge > 0 ? `+${k.edge.toFixed(1)}pp` : `${k.edge.toFixed(1)}pp`;
+                const oddsDisplay = k.hasOdds ? k.bookmakerOdds.toFixed(2) : `<span style="color:#adb5bd;">${k.fairOdds ? k.fairOdds.toFixed(2) + ' (fair)' : '—'}</span>`;
+                const impliedDisplay = k.hasOdds ? k.impliedProb.toFixed(1) + '%' : '—';
+                const qkDisplay = k.hasEdge ? `<span class="kelly-positive">${(k.quarterKelly * 100).toFixed(2)}%</span>` : `<span class="kelly-zero">0%</span>`;
+                const evDisplay = k.hasEdge ? `<span class="kelly-positive">+${(k.evPerUnit * 100).toFixed(1)}%</span>` : k.hasOdds ? `<span class="kelly-negative">${(k.evPerUnit * 100).toFixed(1)}%</span>` : '—';
+                const barWidth = k.hasEdge ? Math.min((k.quarterKelly / maxQK) * 100, 100) : 0;
+                tableHtml += `<tr class="${rowClass}"><td><strong>${d.name}</strong>${isBest && k.hasEdge ? ' ★' : ''}</td><td>${k.modelProb.toFixed(1)}%</td><td>${oddsDisplay}</td><td>${impliedDisplay}</td><td><span class="edge-badge ${edgeBadge}">${edgeText}</span></td><td>${qkDisplay}${k.hasEdge ? `<div class="stake-bar-container"><div class="stake-bar positive" style="width:${barWidth}%"></div></div>` : ''}</td><td>${evDisplay}</td></tr>`;
+            });
+            tableHtml += '</tbody></table>';
+            container.innerHTML = bannerHtml + tableHtml;
+        }
 
         // SWEET SPOT EVALUATION
         let lastSweetSpotResult = null;
