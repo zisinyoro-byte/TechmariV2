@@ -461,7 +461,7 @@
         <div id="attackWeakDefenseSection" class="hidden">
             <h3>Entertaining Teams (Strong Attack + Weak Defense)</h3>
             <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Teams that score a lot but also concede - ideal for Over goals and BTTS markets. Ratings are now <strong>SOS-adjusted</strong> to account for opposition strength.</p>
-            <div class="awd-explanation"><p><strong>How it works (v2 - SOS Adjusted):</strong> Attack and defense ratings are iteratively adjusted based on the quality of opponents faced. If a team scored heavily against weak defenses, their attack is <span style="color:#dc3545">deflated (inflated raw)</span>. If they scored against strong defenses, their attack is <span style="color:#28a745">boosted (deflated raw)</span>. <strong>Raw values</strong> are shown crossed out for comparison. Needs 4+ teams and 10+ matches for SOS to activate.</p></div>
+            <div class="awd-explanation"><p><strong>How it works (v2 - SOS Adjusted):</strong> Ratings are iteratively adjusted for opponent strength. If a team scored heavily against <span style="color:#dc3545">weak defenses</span>, their attack is <span style="color:#dc3545">deflated (padded)</span>. If they scored against <span style="color:#28a745">strong defenses</span>, their attack is <span style="color:#28a745">boosted (proven)</span>. <strong>Raw values</strong> shown crossed out. Needs 4+ teams and 10+ matches for SOS to activate.</p></div>
             <div id="attackWeakDefenseContent"></div>
         </div>
         <div id="insightsSection" class="hidden">
@@ -942,16 +942,20 @@
             function renderSOSDelta(elId, sosVal, rawVal) {
                 const el = document.getElementById(elId); const diff = sosVal - rawVal;
                 if (Math.abs(diff) < 0.03) { el.className = 'xg-sos-delta sos-flat'; el.innerText = '(SOS: ~0)'; }
-                else if (diff > 0) { el.className = 'xg-sos-delta sos-up'; el.innerText = `(SOS: +${diff.toFixed(2)})`; }
-                else { el.className = 'xg-sos-delta sos-down'; el.innerText = `(SOS: ${diff.toFixed(2)})`; }
+                // diff > 0 = SOS boosted xG (faced strong defenses, genuine attacking strength)
+                else if (diff > 0) { el.className = 'xg-sos-delta sos-up'; el.innerText = `(SOS: +${diff.toFixed(2)} proven)`; }
+                // diff < 0 = SOS reduced xG (faced weak defenses, attack was padded)
+                else { el.className = 'xg-sos-delta sos-down'; el.innerText = `(SOS: ${diff.toFixed(2)} padded)`; }
             }
             renderSOSDelta('homeXgSOS', lambdaHome, rawLambdaHome);
             renderSOSDelta('awayXgSOS', lambdaAway, rawLambdaAway);
             // Show SOS note banner
             const sosNote = document.getElementById('sosPredictionNote');
             const hDelta = hStats.sosAttackDelta || 0; const aDelta = aStats.sosAttackDelta || 0;
-            const homeSOSDesc = Math.abs(hDelta) < 0.03 ? 'neutral SOS' : hDelta > 0 ? `attack inflated by easy schedule (+${hDelta.toFixed(2)})` : `attack boosted by hard schedule (${hDelta.toFixed(2)})`;
-            const awaySOSDesc = Math.abs(aDelta) < 0.03 ? 'neutral SOS' : aDelta > 0 ? `attack inflated by easy schedule (+${aDelta.toFixed(2)})` : `attack boosted by hard schedule (${aDelta.toFixed(2)})`;
+            // Attack delta > 0 = faced strong defenses, attack is genuinely good (underrated by raw)
+            // Attack delta < 0 = faced weak defenses, attack is padded (overrated by raw)
+            const homeSOSDesc = Math.abs(hDelta) < 0.03 ? 'neutral SOS' : hDelta > 0 ? `attack proven vs strong defenses (+${hDelta.toFixed(2)})` : `attack padded vs weak defenses (${hDelta.toFixed(2)})`;
+            const awaySOSDesc = Math.abs(aDelta) < 0.03 ? 'neutral SOS' : aDelta > 0 ? `attack proven vs strong defenses (+${aDelta.toFixed(2)})` : `attack padded vs weak defenses (${aDelta.toFixed(2)})`;
             sosNote.style.display = 'block';
             sosNote.innerHTML = `<strong>SOS Adjustment:</strong> ${homeTeam}: ${homeSOSDesc} | ${awayTeam}: ${awaySOSDesc}`;
             document.getElementById('likelyScore').innerText = `${likelyScore} (${((maxFreq/iterations)*100).toFixed(1)}%)`;
@@ -1036,9 +1040,15 @@
                 const isTop = idx < 3;
                 const attDelta = t.sosAttackDelta || 0;
                 const defDelta = t.sosDefenseDelta || 0;
-                const attSOSLabel = Math.abs(attDelta) < 0.03 ? '(SOS: neutral)' : attDelta > 0 ? `(SOS: +${attDelta.toFixed(2)} vs weak opps)` : `(SOS: ${attDelta.toFixed(2)} vs strong opps)`;
-                const defSOSLabel = Math.abs(defDelta) < 0.03 ? '(SOS: neutral)' : defDelta > 0 ? `(SOS: +${defDelta.toFixed(2)} vs weak atts)` : `(SOS: ${defDelta.toFixed(2)} vs strong atts)`;
-                const attSOSClass = attDelta > 0.05 ? 'sos-inflated' : attDelta < -0.05 ? 'sos-deflated' : 'sos-neutral';
+                // ATTACK: delta > 0 means SOS went UP (faced strong defenses, raw underrated them)
+                //          delta < 0 means SOS went DOWN (faced weak defenses, raw overrated them)
+                const attSOSLabel = Math.abs(attDelta) < 0.03 ? '(SOS: neutral)' : attDelta > 0 ? `(SOS: +${attDelta.toFixed(2)} proved vs strong defs)` : `(SOS: ${attDelta.toFixed(2)} padded vs weak defs)`;
+                // DEFENSE: delta > 0 means SOS went UP (faced weak attacks, raw made defense look better than it is)
+                //          delta < 0 means SOS went DOWN (faced strong attacks, raw made defense look worse than it is)
+                const defSOSLabel = Math.abs(defDelta) < 0.03 ? '(SOS: neutral)' : defDelta > 0 ? `(SOS: +${defDelta.toFixed(2)} exposed vs weak atts)` : `(SOS: ${defDelta.toFixed(2)} tested vs strong atts)`;
+                // Attack: green when proven (delta > 0), red when padded (delta < 0)
+                const attSOSClass = attDelta > 0.05 ? 'sos-deflated' : attDelta < -0.05 ? 'sos-inflated' : 'sos-neutral';
+                // Defense: red when exposed (delta > 0, defense is worse than raw), green when tested (delta < 0, defense is better)
                 const defSOSClass = defDelta > 0.05 ? 'sos-inflated' : defDelta < -0.05 ? 'sos-deflated' : 'sos-neutral';
                 return `<div class="awd-team-card ${isTop ? 'top-tier' : ''}"><div class="awd-team-header"><span class="awd-team-name">${idx + 1}. ${t.team}${isTop ? '<span class="highlight-badge">HOT</span>' : ''}</span><span class="awd-score-badge ${isTop ? 'hot' : ''}">Score: ${t.combinedScore.toFixed(2)}</span></div><div class="awd-stats-row"><div class="awd-stat-item"><div class="awd-stat-label">Attack (SOS)</div><div class="awd-stat-value good">${t.attack.toFixed(2)}</div><div class="awd-sos-label ${attSOSClass}">${attSOSLabel}</div><div class="awd-raw-label">Raw: ${t.rawAttack.toFixed(2)}</div></div><div class="awd-stat-item"><div class="awd-stat-label">Defense (SOS)</div><div class="awd-stat-value bad">${t.defense.toFixed(2)}</div><div class="awd-sos-label ${defSOSClass}">${defSOSLabel}</div><div class="awd-raw-label">Raw: ${t.rawDefense.toFixed(2)}</div></div><div class="awd-stat-item"><div class="awd-stat-label">Avg Scored</div><div class="awd-stat-value purple">${t.avgScored.toFixed(2)}</div></div><div class="awd-stat-item"><div class="awd-stat-label">Avg Conceded</div><div class="awd-stat-value bad">${t.avgConceded.toFixed(2)}</div></div></div><div class="awd-meter"><span class="awd-meter-label">Attack Power</span><div class="awd-meter-bar"><div class="awd-meter-fill attack" style="width: ${(t.attack / maxA) * 100}%"></div></div></div><div class="awd-meter"><span class="awd-meter-label">Defensive Leak</span><div class="awd-meter-bar"><div class="awd-meter-fill defense" style="width: ${(t.defense / maxD) * 100}%"></div></div></div></div>`; 
             }).join('');
