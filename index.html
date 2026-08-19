@@ -1056,9 +1056,16 @@
             else { if ((dev.home && dev.home.signal === 'up') || (dev.away && dev.away.signal === 'up')) regressionSignal = "Mixed (Over Lean)"; else if ((dev.home && dev.home.signal === 'down') || (dev.away && dev.away.signal === 'down')) regressionSignal = "Mixed (Under Lean)"; }
             let zScoreSignal = "Neutral"; if (lastZScoreData) zScoreSignal = lastZScoreData.combinedSignalLabel || "Neutral";
             let csvContent = "data:text/csv;charset=utf-8,";
-            csvContent += "Team A,Team B,Last H2H,Predicted Score,Model 1.5 Odds,Model BTTS Odds,O2.5 Prob,O3.5 Prob,BTTS Confidence,O1.5 Confidence,BTTS Prob,Regression Overall Signal,Z-Score Signal,Sweet Spot\n";
+            csvContent += "Team A,Team B,Last H2H,Predicted Score,Model 1.5 Odds,Model BTTS Odds,O2.5 Prob,O3.5 Prob,BTTS Confidence,O1.5 Confidence,BTTS Prob,Regression Overall Signal,Z-Score Signal,Sweet Spot,O2.5 Quarter Kelly %\n";
+            // Calculate O2.5 Quarter Kelly for CSV
+            const o25OddsCSV = parseFloat(document.getElementById('oddsO25').value) || null;
+            let o25KellyPct = "No Odds";
+            if (o25OddsCSV && o25OddsCSV >= 1.01) {
+                const o25Kelly = calculateQuarterKelly(pred.over25Prob, o25OddsCSV);
+                o25KellyPct = (o25Kelly.quarterKelly * 100).toFixed(2) + "%";
+            }
             let sweetSpot = "NO"; if (lastSweetSpotResult && lastSweetSpotResult.allHit) sweetSpot = "YES";
-            csvContent += `"${pred.homeTeam}","${pred.awayTeam}","${lastH2H}","${predictedScore}",${model15Odds},${modelBttsOdds},"${o25Prob}","${o35Prob}",${bttsConfidence},${o15Confidence},"${bttsProb}",${regressionSignal},${zScoreSignal},${sweetSpot}\n`;
+            csvContent += `"${pred.homeTeam}","${pred.awayTeam}","${lastH2H}","${predictedScore}",${model15Odds},${modelBttsOdds},"${o25Prob}","${o35Prob}",${bttsConfidence},${o15Confidence},"${bttsProb}",${regressionSignal},${zScoreSignal},${sweetSpot},"${o25KellyPct}"\n`;
             const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent));
             link.setAttribute("download", `techmari_prediction_${pred.homeTeam}_vs_${pred.awayTeam}_${new Date().toISOString().slice(0,10)}.csv`);
             document.body.appendChild(link); link.click(); document.body.removeChild(link);
