@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Techmari Pro FP1</title>
+    <title>Techmari Pro FP2 — football-data.co.uk</title>
     <style>
         body {
             font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -409,18 +409,202 @@
         .discovered-ss-alt-stat-value { font-size: 14px; font-weight: bold; color: #495057; }
         .discovered-ss-alt-stat-value.green { color: #28a745; }
         .discovered-ss-alt-stat-label { font-size: 9px; text-transform: uppercase; color: #6c757d; }
+    
+        /* football-data.co.uk Data Source Selector */
+        .datasource-panel {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .datasource-panel h3 {
+            color: #0056b3;
+            border-bottom: none;
+            margin-top: 0;
+            font-size: 18px;
+            text-align: center;
+        }
+        .datasource-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        .datasource-row .control-group {
+            flex: 1;
+            min-width: 180px;
+        }
+        .datasource-row .control-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .datasource-row select, .datasource-row input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #333;
+            background: #fff;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+        .datasource-row select:focus, .datasource-row input:focus {
+            outline: none;
+            border-color: #0056b3;
+            box-shadow: 0 0 0 3px rgba(0,86,179,0.1);
+        }
+        .btn-fetch {
+            background: linear-gradient(135deg, #0056b3 0%, #003d82 100%);
+            color: #fff !important;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            min-width: 160px;
+        }
+        .btn-fetch:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,86,179,0.3); }
+        .btn-fetch:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .datasource-info {
+            font-size: 12px;
+            color: #6c757d;
+            text-align: center;
+            margin-top: 8px;
+        }
+        .datasource-info a { color: #0056b3; text-decoration: none; }
+        .datasource-info a:hover { text-decoration: underline; }
+        .odds-source-badge {
+            display: inline-block;
+            background: #e8f4fd;
+            color: #0056b3;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 4px;
+        }
+        .legacy-toggle {
+            text-align: center;
+            margin-top: 10px;
+        }
+        .legacy-toggle a {
+            color: #6c757d;
+            font-size: 12px;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+        .legacy-toggle a:hover { color: #0056b3; }
+
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>Techmari Pro FP1</h2>
-        <p>Statistical Data Processor & Prediction Engine</p>
-        <textarea id="rawInput" placeholder="Paste text data here..."></textarea>
-        <div class="actions">
-            <button onclick="processData()" class="btn-process">Process Text</button>
-            <input type="file" id="csvInput" accept=".csv" onchange="handleFileUpload(event)" style="display:none;">
-            <button onclick="document.getElementById('csvInput').click()" class="btn-upload">Upload CSV</button>
-            <button id="downloadBtn" onclick="downloadCSV()" class="btn-download" disabled>Download CSV</button>
+        <h2>Techmari Pro FP2</h2>
+        <p>Statistical Data Processor & Prediction Engine <span style='font-size:11px;color:#6c757d;'>— Powered by football-data.co.uk</span></p>
+        <!-- football-data.co.uk Data Source -->
+        <div class="datasource-panel" id="datasourcePanel">
+            <h3>Step 1: Select League & Season</h3>
+            <div class="datasource-row">
+                <div class="control-group">
+                    <label>League</label>
+                    <select id="leagueSelect">
+                        <option value="E0">English Premier League</option>
+                        <option value="E1">English Championship</option>
+                        <option value="E2">English League 1</option>
+                        <option value="E3">English League 2</option>
+                        <option value="EC">English National League</option>
+                        <option value="SC0">Scottish Premier League</option>
+                        <option value="SC1">Scottish Championship</option>
+                        <option value="SC2">Scottish League 1</option>
+                        <option value="SC3">Scottish League 2</option>
+                        <option value="D1">German Bundesliga</option>
+                        <option value="D2">German 2. Bundesliga</option>
+                        <option value="I1">Italian Serie A</option>
+                        <option value="I2">Italian Serie B</option>
+                        <option value="SP1">Spanish La Liga</option>
+                        <option value="SP2">Spanish Segunda</option>
+                        <option value="F1">French Ligue 1</option>
+                        <option value="F2">French Ligue 2</option>
+                        <option value="N1">Dutch Eredivisie</option>
+                        <option value="B1">Belgian First Div</option>
+                        <option value="P1">Portuguese Liga</option>
+                        <option value="T1">Turkish Super Lig</option>
+                        <option value="G1">Greek Super League</option>
+                        <option value="PO">Polish Ekstraklasa</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Season</label>
+                    <select id="seasonSelect">
+                        <option value="2627">2026/27 (Current)</option>
+                        <option value="2526">2025/26</option>
+                        <option value="2425">2024/25</option>
+                        <option value="2324">2023/24</option>
+                        <option value="2223">2022/23</option>
+                        <option value="2122">2021/22</option>
+                        <option value="2021">2020/21</option>
+                        <option value="1920">2019/20</option>
+                        <option value="1819">2018/19</option>
+                        <option value="1718">2017/18</option>
+                        <option value="1617">2016/17</option>
+                        <option value="1516">2015/16</option>
+                        <option value="1415">2014/15</option>
+                        <option value="1314">2013/14</option>
+                        <option value="1213">2012/13</option>
+                        <option value="1112">2011/12</option>
+                        <option value="1011">2010/11</option>
+                        <option value="0910">2009/10</option>
+                        <option value="0809">2008/09</option>
+                        <option value="0708">2007/08</option>
+                        <option value="0607">2006/07</option>
+                        <option value="0506">2005/06</option>
+                        <option value="0405">2004/05</option>
+                        <option value="0304">2003/04</option>
+                        <option value="0203">2002/03</option>
+                        <option value="0102">2001/02</option>
+                        <option value="0001">2000/01</option>
+                    </select>
+                </div>
+                <div class="control-group" style="flex: 0 0 auto;">
+                    <label>&nbsp;</label>
+                    <button id="fetchBtn" class="btn-fetch" onclick="fetchFootballData()">Load Data</button>
+                </div>
+            </div>
+            <div class="datasource-info">
+                Powered by <a href="https://www.football-data.co.uk/" target="_blank">football-data.co.uk</a> — Free CSV data with match results, statistics & betting odds.
+                <span id="oddsSourceBadge" class="odds-source-badge" style="display:none;">Odds: B365/Pinnacle/Avg</span>
+            </div>
+            <div style="display:flex; gap:10px; justify-content:center; margin-top:12px;">
+                <button id="mainDownloadBtn" onclick="downloadCSV()" class="btn-download" disabled style="flex:none; padding:8px 20px;">Download CSV</button>
+            </div>
+            <div class="legacy-toggle">
+                <a onclick="toggleLegacyInput()" id="legacyToggleLink">Switch to manual paste / CSV upload</a>
+            </div>
+        </div>
+
+        <!-- Legacy Input (hidden by default) -->
+        <div id="legacyInputPanel" class="hidden">
+            <textarea id="rawInput" placeholder="Paste text data here..."></textarea>
+            <div class="actions">
+                <button onclick="processData()" class="btn-process">Process Text</button>
+                <input type="file" id="csvInput" accept=".csv" onchange="handleFileUpload(event)" style="display:none;">
+                <button onclick="document.getElementById('csvInput').click()" class="btn-upload">Upload CSV</button>
+                <button id="downloadBtn" onclick="downloadCSV()" class="btn-download" disabled>Download CSV</button>
+            </div>
+            <div class="legacy-toggle">
+                <a onclick="toggleLegacyInput()" id="legacyToggleBack">Switch to football-data.co.uk loader</a>
+            </div>
         </div>
         <div id="statusArea" class="status"></div>
         <div id="predictionSection" class="hidden">
@@ -684,6 +868,267 @@
 
         function isValidDate(str) { return /^\d+\.\d+\./.test(str); }
 
+
+        // ============================================================
+        // football-data.co.uk INTEGRATION
+        // ============================================================
+
+        // Store per-match odds from football-data.co.uk for auto-fill
+        let matchOddsData = {};  // key: "HomeTeam vs AwayTeam" -> { B365O25, B365O15, B365O35, B365BTTS, PSO25, AvgO25, ... }
+
+        const LEAGUE_NAMES = {
+            'E0': 'English Premier League', 'E1': 'English Championship',
+            'E2': 'English League 1', 'E3': 'English League 2', 'EC': 'English National League',
+            'SC0': 'Scottish Premier League', 'SC1': 'Scottish Championship',
+            'SC2': 'Scottish League 1', 'SC3': 'Scottish League 2',
+            'D1': 'German Bundesliga', 'D2': 'German 2. Bundesliga',
+            'I1': 'Italian Serie A', 'I2': 'Italian Serie B',
+            'SP1': 'Spanish La Liga', 'SP2': 'Spanish Segunda',
+            'F1': 'French Ligue 1', 'F2': 'French Ligue 2',
+            'N1': 'Dutch Eredivisie', 'B1': 'Belgian First Div',
+            'P1': 'Portuguese Liga', 'T1': 'Turkish Super Lig',
+            'G1': 'Greek Super League', 'PO': 'Polish Ekstraklasa'
+        };
+
+        function toggleLegacyInput() {
+            const dsPanel = document.getElementById('datasourcePanel');
+            const legacyPanel = document.getElementById('legacyInputPanel');
+            if (dsPanel.classList.contains('hidden')) {
+                dsPanel.classList.remove('hidden');
+                legacyPanel.classList.add('hidden');
+            } else {
+                dsPanel.classList.add('hidden');
+                legacyPanel.classList.remove('hidden');
+            }
+        }
+
+        async function fetchFootballData() {
+            const league = document.getElementById('leagueSelect').value;
+            const season = document.getElementById('seasonSelect').value;
+            const fetchBtn = document.getElementById('fetchBtn');
+            const statusArea = document.getElementById('statusArea');
+            const tableBody = document.querySelector('#resultsTable tbody');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const tableContainer = document.querySelector('.table-wrapper');
+
+            fetchBtn.disabled = true;
+            fetchBtn.innerText = 'Loading...';
+            statusArea.innerText = `Fetching ${LEAGUE_NAMES[league] || league} ${season} data...`;
+            statusArea.style.color = '#0056b3';
+
+            const url = `https://www.football-data.co.uk/mmz4281/${season}/${league}.csv`;
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status} — Season/league combo may not be available yet.`);
+                }
+                const csvText = await response.text();
+                parseFootballDataCSV(csvText, league, season, statusArea, downloadBtn, tableContainer, tableBody);
+            } catch (error) {
+                statusArea.innerText = `Error: ${error.message}`;
+                statusArea.style.color = '#dc3545';
+            } finally {
+                fetchBtn.disabled = false;
+                fetchBtn.innerText = 'Load Data';
+            }
+        }
+
+        function parseFootballDataCSV(csvText, leagueCode, season, statusArea, downloadBtn, tableContainer, tableBody) {
+            const lines = csvText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            if (lines.length < 2) {
+                statusArea.innerText = 'No data found for this league/season.';
+                statusArea.style.color = '#dc3545';
+                return;
+            }
+
+            // Parse header to build column index map
+            const headers = lines[0].split(',').map(h => h.trim().replace(/^\uFEFF/, ''));
+            const col = {};
+            headers.forEach((h, i) => { col[h] = i; });
+
+            // Required columns
+            const reqCols = ['Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG'];
+            for (const rc of reqCols) {
+                if (!(rc in col)) {
+                    statusArea.innerText = `CSV missing required column: ${rc}`;
+                    statusArea.style.color = '#dc3545';
+                    return;
+                }
+            }
+
+            const hasFTR = 'FTR' in col;
+            const hasTime = 'Time' in col;
+            const hasOddsB365O25 = 'B365>2.5' in col;
+            const hasOddsAvgO25 = 'Avg>2.5' in col;
+            const hasOddsPSO25 = 'P>2.5' in col;
+            const hasOddsMaxO25 = 'Max>2.5' in col;
+            const hasB365H = 'B365H' in col;
+            const hasB365D = 'B365D' in col;
+            const hasB365A = 'B365A' in col;
+            const hasBFEH = 'BFEH' in col;
+            const hasBFED = 'BFED' in col;
+            const hasBFEA = 'BFEA' in col;
+            const hasBFE25 = 'BFE>2.5' in col;
+            const hasBFEU25 = 'BFE<2.5' in col;
+            const hasHS = 'HS' in col;
+            const hasAS = 'AS' in col;
+            const hasHST = 'HST' in col;
+            const hasAST = 'AST' in col;
+            const hasHC = 'HC' in col;
+            const hasAC = 'AC' in col;
+
+            // Show odds badge if odds data exists
+            const hasAnyOdds = hasB365H || hasOddsAvgO25;
+            document.getElementById('oddsSourceBadge').style.display = hasAnyOdds ? 'inline-block' : 'none';
+
+            const leagueName = LEAGUE_NAMES[leagueCode] || leagueCode;
+            globalMatches = [];
+            matchOddsData = {};
+
+            for (let i = 1; i < lines.length; i++) {
+                const cols = lines[i].split(',');
+                if (cols.length < 5) continue;
+
+                const homeTeam = (cols[col['HomeTeam']] || '').trim();
+                const awayTeam = (cols[col['AwayTeam']] || '').trim();
+                if (!homeTeam || !awayTeam) continue;
+
+                const homeScore = parseInt(cols[col['FTHG']]);
+                const awayScore = parseInt(cols[col['FTAG']]);
+                if (isNaN(homeScore) || isNaN(awayScore)) continue;
+
+                // Parse date: football-data.co.uk uses DD/MM/YYYY
+                const rawDate = (cols[col['Date']] || '').trim();
+                const date = formatDateFromUK(rawDate);
+
+                const ftr = hasFTR ? (cols[col['FTR']] || '').trim() : '';
+                const time = hasTime ? (cols[col['Time']] || '').trim() : '';
+
+                const match = {
+                    league: leagueName,
+                    round: '',
+                    date: date,
+                    homeTeam: homeTeam,
+                    awayTeam: awayTeam,
+                    homeScore: homeScore,
+                    awayScore: awayScore,
+                    ftr: ftr,
+                    time: time,
+                    notes: 'football-data.co.uk'
+                };
+
+                // Store extra stats if available
+                if (hasHS) match.homeShots = parseInt(cols[col['HS']]) || 0;
+                if (hasAS) match.awayShots = parseInt(cols[col['AS']]) || 0;
+                if (hasHST) match.homeShotsOnTarget = parseInt(cols[col['HST']]) || 0;
+                if (hasAST) match.awayShotsOnTarget = parseInt(cols[col['AST']]) || 0;
+                if (hasHC) match.homeCorners = parseInt(cols[col['HC']]) || 0;
+                if (hasAC) match.awayCorners = parseInt(cols[col['AC']]) || 0;
+
+                globalMatches.push(match);
+
+                // Store odds data for this match
+                const oddsKey = `${homeTeam} vs ${awayTeam}`;
+                const odds = {};
+                if (hasOddsB365O25) { const v = parseFloat(cols[col['B365>2.5']]); if (v >= 1.01) odds.B365O25 = v; }
+                if (hasOddsAvgO25) { const v = parseFloat(cols[col['Avg>2.5']]); if (v >= 1.01) odds.AvgO25 = v; }
+                if (hasOddsPSO25) { const v = parseFloat(cols[col['P>2.5']]); if (v >= 1.01) odds.PSO25 = v; }
+                if (hasOddsMaxO25) { const v = parseFloat(cols[col['Max>2.5']]); if (v >= 1.01) odds.MaxO25 = v; }
+                if (hasB365H) { const v = parseFloat(cols[col['B365H']]); if (v >= 1.01) odds.B365H = v; }
+                if (hasB365D) { const v = parseFloat(cols[col['B365D']]); if (v >= 1.01) odds.B365D = v; }
+                if (hasB365A) { const v = parseFloat(cols[col['B365A']]); if (v >= 1.01) odds.B365A = v; }
+                if (hasBFEH) { const v = parseFloat(cols[col['BFEH']]); if (v >= 1.01) odds.BFEH = v; }
+                if (hasBFED) { const v = parseFloat(cols[col['BFED']]); if (v >= 1.01) odds.BFED = v; }
+                if (hasBFEA) { const v = parseFloat(cols[col['BFEA']]); if (v >= 1.01) odds.BFEA = v; }
+                if (hasBFE25) { const v = parseFloat(cols[col['BFE>2.5']]); if (v >= 1.01) odds.BFEO25 = v; }
+                if (hasBFEU25) { const v = parseFloat(cols[col['BFE<2.5']]); if (v >= 1.01) odds.BFEO25U = v; }
+
+                // Derive implied probability for BTTS from 1X2 odds (Poisson-based approximation)
+                if (odds.B365H && odds.B365D && odds.B365A) {
+                    const pHome = 1 / odds.B365H;
+                    const pDraw = 1 / odds.B365D;
+                    const pAway = 1 / odds.B365A;
+                    // Rough home clean sheet prob: P(home win) + fraction of draw
+                    const pHomeCS = pHome + pDraw * 0.55;
+                    const pAwayCS = pAway + pDraw * 0.45;
+                    const pBTTS = Math.max(0, 1 - pHomeCS) * Math.max(0, 1 - pAwayCS);
+                    const bttsOdds = pBTTS > 0.01 ? (1 / pBTTS) : null;
+                    if (bttsOdds && bttsOdds >= 1.01) odds.B365BTTS = parseFloat(bttsOdds.toFixed(2));
+                }
+
+                // Derive O1.5 and O3.5 from O2.5 odds (heuristic scaling)
+                if (odds.B365O25) {
+                    const o15 = odds.B365O25 * 0.55;
+                    const o35 = odds.B365O25 * 1.65;
+                    if (o15 >= 1.01) odds.B365O15 = parseFloat(o15.toFixed(2));
+                    if (o35 >= 1.01) odds.B365O35 = parseFloat(o35.toFixed(2));
+                }
+
+                if (Object.keys(odds).length > 0) {
+                    matchOddsData[oddsKey] = odds;
+                }
+            }
+
+            // Also store reverse key for H2H lookups
+            for (const key in matchOddsData) {
+                const parts = key.split(' vs ');
+                if (parts.length === 2) {
+                    const revKey = `${parts[1]} vs ${parts[0]}`;
+                    if (!matchOddsData[revKey]) {
+                        matchOddsData[revKey] = matchOddsData[key];
+                    }
+                }
+            }
+
+            // Sort matches by date (newest format DD/MM/YYYY)
+            globalMatches.sort((a, b) => {
+                const da = parseDateForSort(a.date);
+                const db = parseDateForSort(b.date);
+                return da - db;
+            });
+
+            renderTable(statusArea, downloadBtn, tableContainer, tableBody);
+        }
+
+        /**
+         * Format a UK date string (DD/MM/YYYY or DD/MM/YY) to a sortable/displayable format.
+         * Returns DD/MM/YYYY for display and parseDateForSort compatibility.
+         */
+        function formatDateFromUK(rawDate) {
+            const parts = rawDate.split('/');
+            if (parts.length !== 3) return rawDate;
+            let day = parts[0].padStart(2, '0');
+            let month = parts[1].padStart(2, '0');
+            let year = parts[2];
+            if (year.length === 2) year = '20' + year;
+            return `${day}/${month}/${year}`;
+        }
+
+        /**
+         * Auto-fill odds inputs when a prediction matchup is selected.
+         */
+        function autoFillOddsFromData(homeTeam, awayTeam) {
+            const key = `${homeTeam} vs ${awayTeam}`;
+            const odds = matchOddsData[key];
+            if (!odds) return;
+
+            // Prefer B365, fallback to Avg, then Pinnacle
+            const o25 = odds.B365O25 || odds.AvgO25 || odds.PSO25;
+            const o15 = odds.B365O15 || (o25 ? parseFloat((o25 * 0.55).toFixed(2)) : null);
+            const o35 = odds.B365O35 || (o25 ? parseFloat((o25 * 1.65).toFixed(2)) : null);
+            const btts = odds.B365BTTS;
+
+            if (o25) document.getElementById('oddsO25').value = o25;
+            if (o15) document.getElementById('oddsO15').value = o15;
+            if (o35) document.getElementById('oddsO35').value = o35;
+            if (btts) document.getElementById('oddsBTTS').value = btts;
+        }
+
+        // ============================================================
+        // END football-data.co.uk INTEGRATION
+        // ============================================================
+
         function processData() {
             const rawInput = document.getElementById('rawInput').value;
             const statusArea = document.getElementById('statusArea');
@@ -811,8 +1256,24 @@
         function renderTable(statusArea, downloadBtn, tableContainer, tableBody) {
             if (globalMatches.length > 0) {
                 statusArea.innerText = `Successfully processed ${globalMatches.length} matches. System Ready.`; statusArea.style.color = "#28a745";
-                downloadBtn.disabled = false; tableContainer.classList.remove('hidden');
-                globalMatches.forEach(m => { const row = `<tr><td>${m.league}</td><td>${m.round}</td><td>${m.date}</td><td>${m.homeTeam}</td><td>${m.awayTeam}</td><td>${m.homeScore}</td><td>${m.awayScore}</td></tr>`; tableBody.innerHTML += row; });
+                downloadBtn.disabled = false; tableContainer.classList.remove('hidden'); const mainDl = document.getElementById('mainDownloadBtn'); if (mainDl) mainDl.disabled = false;
+                const hasFTR = globalMatches.length > 0 && globalMatches[0].ftr !== undefined;
+                const headerRow = tableBody.parentElement.querySelector('thead tr');
+                if (hasFTR && headerRow) {
+                    const ths = headerRow.querySelectorAll('th');
+                    if (ths.length === 7) {
+                        const ftrTh = document.createElement('th'); ftrTh.innerText = 'FTR'; headerRow.appendChild(ftrTh);
+                    }
+                }
+                globalMatches.forEach(m => {
+                    let row = `<tr><td>${m.league}</td><td>${m.round}</td><td>${m.date}</td><td>${m.homeTeam}</td><td>${m.awayTeam}</td><td>${m.homeScore}</td><td>${m.awayScore}</td>`;
+                    if (hasFTR) {
+                        const ftrColor = m.ftr === 'H' ? '#28a745' : m.ftr === 'A' ? '#dc3545' : '#fd7e14';
+                        row += `<td style="font-weight:bold;color:${ftrColor}">${m.ftr || ''}</td>`;
+                    }
+                    row += '</tr>';
+                    tableBody.innerHTML += row;
+                });
                 initSystem();
             } else { statusArea.innerText = "No matches found. Please check the text format."; statusArea.style.color = "#dc3545"; }
         }
@@ -1026,6 +1487,7 @@
             document.getElementById('bttsProb').innerText = bttsProb.toFixed(1) + "%";
             document.getElementById('predictionResults').classList.remove('hidden'); document.getElementById('exportPredictionBtn').disabled = false;
             lastPredictionData = { homeTeam, awayTeam, homeWinProb: ((homeWins / iterations) * 100), drawProb: ((draws / iterations) * 100), awayWinProb: ((awayWins / iterations) * 100), homeXg: lambdaHome, awayXg: lambdaAway, likelyScore, likelyScoreProb: ((maxFreq/iterations)*100), over15Prob, over25Prob, over35Prob, bttsProb };
+            autoFillOddsFromData(homeTeam, awayTeam);
             runDeviationAnalysis(homeTeam, awayTeam); runZScoreAnalysis(homeTeam, awayTeam); evaluateSweetSpot(); renderMarketRecommendation(lastPredictionData);
         }
 
@@ -1033,8 +1495,20 @@
 
         function downloadCSV() {
             if (globalMatches.length === 0) return;
-            let csvContent = "data:text/csv;charset=utf-8,Date,Home Team,Away Team,Home Score,Away Score\n";
-            globalMatches.forEach(row => { csvContent += `"${row.date}","${row.homeTeam}","${row.awayTeam}",${row.homeScore},${row.awayScore}\n`; });
+            const hasFTR = globalMatches.length > 0 && globalMatches[0].ftr !== undefined;
+            let csvContent = 'data:text/csv;charset=utf-8,';
+            if (hasFTR) {
+                csvContent += 'League,Date,Time,Home Team,Away Team,FTHG,FTAG,FTR\n';
+            } else {
+                csvContent += 'Date,Home Team,Away Team,Home Score,Away Score\n';
+            }
+            globalMatches.forEach(row => {
+                if (hasFTR) {
+                    csvContent += `"${row.league}","${row.date}","${row.time || ''}","${row.homeTeam}","${row.awayTeam}",${row.homeScore},${row.awayScore},${row.ftr || ''}\n`;
+                } else {
+                    csvContent += `"${row.date}","${row.homeTeam}","${row.awayTeam}",${row.homeScore},${row.awayScore}\n`;
+                }
+            });
             const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", "techmari_processed_data.csv");
             document.body.appendChild(link); link.click(); document.body.removeChild(link);
         }
@@ -1143,14 +1617,27 @@
             runStrongBetChecklist();
         }
 
-        // Sort helper: parses date strings like "17.04." or "10.04." into comparable values
-        // Format: DD.MM. — we parse as MM*100+DD for sorting (assumes same year)
+        // Sort helper: parses date strings into comparable values
+        // Supports: DD/MM/YYYY, DD.MM.YYYY, DD.MM., DD/MM/YY
         function parseDateForSort(dateStr) {
-            const match = dateStr.match(/(\d+)\.(\d+)\./);
-            if (!match) return 0;
-            const day = parseInt(match[1]);
-            const month = parseInt(match[2]);
-            return month * 100 + day; // Sort by month first, then day
+            if (!dateStr || dateStr === 'Unknown Date') return 0;
+            // Try DD/MM/YYYY or DD.MM.YYYY
+            let match = dateStr.match(/(\d{1,2})[\/\.](\d{1,2})[\/\.](\d{2,4})/);
+            if (match) {
+                const day = parseInt(match[1]);
+                const month = parseInt(match[2]);
+                let year = parseInt(match[3]);
+                if (year < 100) year += 2000;
+                return year * 10000 + month * 100 + day;
+            }
+            // Try DD.MM. (no year)
+            match = dateStr.match(/(\d+)\.(\d+)\./);
+            if (match) {
+                const day = parseInt(match[1]);
+                const month = parseInt(match[2]);
+                return month * 100 + day;
+            }
+            return 0;
         }
 
         function sortMatchesByDate(matches) {
