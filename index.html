@@ -916,22 +916,41 @@
             statusArea.innerText = `Fetching ${LEAGUE_NAMES[league] || league} ${season} data...`;
             statusArea.style.color = '#0056b3';
 
-            const url = `https://www.football-data.co.uk/mmz4281/${season}/${league}.csv`;
+            const baseUrl = `https://www.football-data.co.uk/mmz4281/${season}/${league}.csv`;
 
-            try {
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status} — Season/league combo may not be available yet.`);
+            // CORS proxy list — try direct first, then proxies in order
+            const proxyUrls = [
+                '',  // direct fetch first
+                'https://corsproxy.io/?',
+                'https://api.allorigins.win/raw?url='
+            ];
+
+            let csvText = null;
+            let lastError = null;
+
+            for (const proxy of proxyUrls) {
+                const url = proxy ? proxy + encodeURIComponent(baseUrl) : baseUrl;
+                try {
+                    statusArea.innerText = `Fetching ${LEAGUE_NAMES[league] || league} ${season} data...`;
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    csvText = await response.text();
+                    if (csvText && csvText.includes('HomeTeam')) break;
+                    csvText = null;
+                } catch (err) {
+                    lastError = err;
                 }
-                const csvText = await response.text();
-                parseFootballDataCSV(csvText, league, season, statusArea, downloadBtn, tableContainer, tableBody);
-            } catch (error) {
-                statusArea.innerText = `Error: ${error.message}`;
-                statusArea.style.color = '#dc3545';
-            } finally {
-                fetchBtn.disabled = false;
-                fetchBtn.innerText = 'Load Data';
             }
+
+            if (csvText) {
+                parseFootballDataCSV(csvText, league, season, statusArea, downloadBtn, tableContainer, tableBody);
+            } else {
+                statusArea.innerHTML = `Error: Could not fetch data. This is likely a CORS restriction.<br><br><strong>Quick fix:</strong> <a href="${baseUrl}" target="_blank" style="color:#0056b3;">Click here to open the CSV</a>, save it, then use <em>Switch to manual paste / CSV upload</em> below to load it.<br><span style="font-size:11px;color:#6c757d;">(Proxy error: ${lastError ? lastError.message : 'unknown'})</span>`;
+                statusArea.style.color = '#dc3545';
+            }
+
+            fetchBtn.disabled = false;
+            fetchBtn.innerText = 'Load Data';
         }
 
         function parseFootballDataCSV(csvText, leagueCode, season, statusArea, downloadBtn, tableContainer, tableBody) {
