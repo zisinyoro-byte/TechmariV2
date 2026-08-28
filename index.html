@@ -1127,9 +1127,9 @@
 
         // ============================================================
         // Fetch with CORS proxy fallback
-        // Reference techmari uses server-side fetch (no CORS).
-        // For standalone HTML we try: direct -> corsproxy.io -> allorigins.win
-        // If all fail, guide user to download CSV manually.
+        // Server-side proxy via Vercel serverless function (same pattern as original techmari).
+        // The API route fetches from football-data.co.uk server-side, avoiding CORS entirely.
+        // Falls back to direct browser fetch + CORS proxies if API route unavailable (local dev).
         // ============================================================
         async function fetchFootballData() {
             const league = document.getElementById('leagueSelect').value;
@@ -1146,33 +1146,52 @@
             statusArea.style.color = '#0056b3';
 
             const baseUrl = `https://www.football-data.co.uk/mmz4281/${season}/${league}.csv`;
-
-            const proxyUrls = [
-                ['', 'Direct'],
-                ['https://corsproxy.io/?', 'corsproxy.io'],
-                ['https://api.allorigins.win/raw?url=', 'allorigins.win']
-            ];
-
             let csvText = null;
             let usedProxy = 'none';
 
-            for (const [proxy, name] of proxyUrls) {
-                const url = proxy ? proxy + encodeURIComponent(baseUrl) : baseUrl;
-                try {
-                    statusArea.innerText = `Trying ${name}...`;
-                    const response = await fetch(url, {
-                        headers: { 'Accept': 'text/csv,text/plain,*/*' }
-                    });
-                    if (!response.ok) continue;
-                    const text = await response.text();
-                    // Validate: must contain the HomeTeam header
+            // --- Strategy 1: Vercel serverless proxy (production, no CORS) ---
+            try {
+                statusArea.innerText = 'Fetching via server proxy...';
+                const apiResponse = await fetch(`/api/fetch-data?league=${encodeURIComponent(league)}&season=${encodeURIComponent(season)}`);
+                if (apiResponse.ok) {
+                    const text = await apiResponse.text();
                     if (text && text.includes('HomeTeam')) {
                         csvText = text;
-                        usedProxy = name;
-                        break;
+                        usedProxy = 'server proxy';
                     }
-                } catch (e) {
-                    // Try next proxy
+                } else {
+                    const errData = await apiResponse.json().catch(() => null);
+                    console.warn('[fetchFootballData] API proxy error:', apiResponse.status, errData);
+                }
+            } catch (e) {
+                // API route not available (e.g. local file:// dev), fall through to CORS proxies
+                console.warn('[fetchFootballData] API proxy unavailable, trying CORS fallbacks:', e.message);
+            }
+
+            // --- Strategy 2: CORS proxy fallbacks (for local dev without Vercel) ---
+            if (!csvText) {
+                const proxyUrls = [
+                    ['https://corsproxy.io/?', 'corsproxy.io'],
+                    ['https://api.allorigins.win/raw?url=', 'allorigins.win']
+                ];
+
+                for (const [proxy, name] of proxyUrls) {
+                    const url = proxy + encodeURIComponent(baseUrl);
+                    try {
+                        statusArea.innerText = `Trying ${name}...`;
+                        const response = await fetch(url, {
+                            headers: { 'Accept': 'text/csv,text/plain,*/*' }
+                        });
+                        if (!response.ok) continue;
+                        const text = await response.text();
+                        if (text && text.includes('HomeTeam')) {
+                            csvText = text;
+                            usedProxy = name;
+                            break;
+                        }
+                    } catch (e) {
+                        // Try next proxy
+                    }
                 }
             }
 
@@ -1181,10 +1200,10 @@
                 parseFootballDataCSV(csvText, league, season, statusArea, downloadBtn, tableContainer, tableBody);
             } else {
                 statusArea.innerHTML = `
-                    <strong>CORS blocked</strong> — browser cannot fetch directly from football-data.co.uk.<br><br>
-                    <strong>Option 1:</strong> <a href="${baseUrl}" target="_blank" style="color:#0056b3;font-weight:bold;">Download CSV</a>, then click <em>"Upload CSV"</em> below.<br>
-                    <strong>Option 2:</strong> Host this HTML on a server with a proxy route (like the Next.js techmari app does).<br>
-                    <span style="font-size:11px;color:#6c757d;">Reference: techmari uses server-side fetch in Next.js API routes to avoid CORS entirely.</span>`;
+                    <strong>Failed to load data</strong> — all fetch methods failed.<br><br>
+                    <strong>Option 1:</strong> <a href="${baseUrl}" target="_blank" style="color:#0056b3;font-weight:bold;">Download CSV manually</a>, then use <em>"Upload CSV"</em>.<br>
+                    <strong>Option 2:</strong> Make sure this is deployed on Vercel (the server proxy only works on Vercel).<br>
+                    <span style="font-size:11px;color:#6c757d;">On Vercel, the /api/fetch-data serverless function proxies requests to football-data.co.uk server-side, avoiding CORS.</span>`;
                 statusArea.style.color = '#dc3545';
             }
 
