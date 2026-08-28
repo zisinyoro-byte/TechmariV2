@@ -874,7 +874,7 @@
         // ============================================================
 
         // Store per-match odds from football-data.co.uk for auto-fill
-        let matchOddsData = {};  // key: "HomeTeam vs AwayTeam" -> { B365O25, B365O15, B365O35, B365BTTS, PSO25, AvgO25, ... }
+        let matchOddsData = {};  // key: "HomeTeam vs AwayTeam" -> odds object
 
         const LEAGUE_NAMES = {
             'E0': 'English Premier League', 'E1': 'English Championship',
@@ -902,6 +902,235 @@
             }
         }
 
+        // ============================================================
+        // Robust CSV parser — ported from techmari data-cache.ts
+        // Handles: BOM, quoted fields, Div validation (redirect protection)
+        // ============================================================
+        function parseCsvLine(line) {
+            const values = [];
+            let current = '';
+            let inQuotes = false;
+            for (const ch of line) {
+                if (ch === '"') { inQuotes = !inQuotes; }
+                else if (ch === ',' && !inQuotes) { values.push(current.trim()); current = ''; }
+                else { current += ch; }
+            }
+            values.push(current.trim());
+            return values;
+        }
+
+        function parseNumber(val) {
+            if (!val || val === '' || val === 'NA' || val === 'N/A') return null;
+            const n = parseFloat(val);
+            return isNaN(n) ? null : n;
+        }
+
+        function parseFootballDataCSV(csvText, leagueCode, season, statusArea, downloadBtn, tableContainer, tableBody) {
+            const lines = csvText.trim().split('\n');
+            if (lines.length < 2) {
+                statusArea.innerText = 'No data found for this league/season.';
+                statusArea.style.color = '#dc3545';
+                return;
+            }
+
+            // Handle BOM (\uFEFF) at start of header — same as reference
+            const headerLine = lines[0].replace(/^\uFEFF/, '');
+            const headers = parseCsvLine(headerLine);
+            const col = {};
+            headers.forEach((h, i) => { col[h] = i; });
+
+            // Required columns
+            const reqCols = ['Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG'];
+            for (const rc of reqCols) {
+                if (!(rc in col)) {
+                    statusArea.innerText = `CSV missing required column: ${rc}`;
+                    statusArea.style.color = '#dc3545';
+                    return;
+                }
+            }
+
+            // Div column validation — football-data.co.uk redirects non-existent
+            // season CSVs to other leagues' data. We must filter by Div.
+            const hasDivCol = col['Div'] !== undefined;
+            const hasFTR = col['FTR'] !== undefined;
+            const hasTime = col['Time'] !== undefined;
+
+            // Detect which odds columns exist
+            const hasB365H = col['B365H'] !== undefined;
+            const hasB365D = col['B365D'] !== undefined;
+            const hasB365A = col['B365A'] !== undefined;
+            const hasB365O25 = col['B365>2.5'] !== undefined;
+            const hasAvgO25 = col['Avg>2.5'] !== undefined;
+            const hasPSO25 = col['P>2.5'] !== undefined;
+            const hasMaxO25 = col['Max>2.5'] !== undefined;
+            const hasAvgH = col['AvgH'] !== undefined;
+            const hasAvgD = col['AvgD'] !== undefined;
+            const hasAvgA = col['AvgA'] !== undefined;
+            const hasBFEH = col['BFEH'] !== undefined;
+            const hasBFED = col['BFED'] !== undefined;
+            const hasBFEA = col['BFEA'] !== undefined;
+            const hasBFE25 = col['BFE>2.5'] !== undefined;
+            const hasBFEU25 = col['BFE<2.5'] !== undefined;
+            const hasHS = col['HS'] !== undefined;
+            const hasAS = col['AS'] !== undefined;
+            const hasHST = col['HST'] !== undefined;
+            const hasAST = col['AST'] !== undefined;
+            const hasHC = col['HC'] !== undefined;
+            const hasAC = col['AC'] !== undefined;
+            const hasHF = col['HF'] !== undefined;
+            const hasAF = col['AF'] !== undefined;
+            const hasHY = col['HY'] !== undefined;
+            const hasAY = col['AY'] !== undefined;
+            const hasHR = col['HR'] !== undefined;
+            const hasAR = col['AR'] !== undefined;
+            const hasHTHG = col['HTHG'] !== undefined;
+            const hasHTAG = col['HTAG'] !== undefined;
+            const hasHTR = col['HTR'] !== undefined;
+
+            const hasAnyOdds = hasB365H || hasAvgO25;
+            document.getElementById('oddsSourceBadge').style.display = hasAnyOdds ? 'inline-block' : 'none';
+
+            const leagueName = LEAGUE_NAMES[leagueCode] || leagueCode;
+            globalMatches = [];
+            matchOddsData = {};
+            let skippedWrongDiv = 0;
+
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i];
+                if (!line.trim()) continue;
+
+                const cols = parseCsvLine(line);
+
+                // Div validation — skip rows from wrong league (redirect protection)
+                if (hasDivCol && leagueCode) {
+                    const div = (cols[col['Div']] || '').trim();
+                    if (div !== leagueCode) { skippedWrongDiv++; continue; }
+                }
+
+                const homeTeam = cols[col['HomeTeam']] || '';
+                const awayTeam = cols[col['AwayTeam']] || '';
+                if (!homeTeam || !awayTeam) continue;
+
+                const homeScore = parseInt(cols[col['FTHG']], 10) || 0;
+                const awayScore = parseInt(cols[col['FTAG']], 10) || 0;
+
+                // Parse date: football-data.co.uk uses DD/MM/YYYY
+                const rawDate = (cols[col['Date']] || '').trim();
+                const date = formatDateFromUK(rawDate);
+
+                const ftr = hasFTR ? (cols[col['FTR']] || 'D').trim() : '';
+                const time = hasTime ? (cols[col['Time']] || '').trim() : '';
+
+                const match = {
+                    league: leagueName,
+                    round: '',
+                    date: date,
+                    homeTeam: homeTeam,
+                    awayTeam: awayTeam,
+                    homeScore: homeScore,
+                    awayScore: awayScore,
+                    ftr: ftr,
+                    time: time,
+                    notes: 'football-data.co.uk'
+                };
+
+                // Half-time data (from reference MatchResult type)
+                if (hasHTHG) match.htHomeGoals = parseInt(cols[col['HTHG']], 10) || 0;
+                if (hasHTAG) match.htAwayGoals = parseInt(cols[col['HTAG']], 10) || 0;
+                if (hasHTR) match.htResult = (cols[col['HTR']] || 'D').trim();
+
+                // Match statistics
+                if (hasHS) match.homeShots = parseInt(cols[col['HS']], 10) || 0;
+                if (hasAS) match.awayShots = parseInt(cols[col['AS']], 10) || 0;
+                if (hasHST) match.homeShotsOnTarget = parseInt(cols[col['HST']], 10) || 0;
+                if (hasAST) match.awayShotsOnTarget = parseInt(cols[col['AST']], 10) || 0;
+                if (hasHC) match.homeCorners = parseInt(cols[col['HC']], 10) || 0;
+                if (hasAC) match.awayCorners = parseInt(cols[col['AC']], 10) || 0;
+                if (hasHF) match.homeFouls = parseInt(cols[col['HF']], 10) || 0;
+                if (hasAF) match.awayFouls = parseInt(cols[col['AF']], 10) || 0;
+                if (hasHY) match.homeYellowCards = parseInt(cols[col['HY']], 10) || 0;
+                if (hasAY) match.awayYellowCards = parseInt(cols[col['AY']], 10) || 0;
+                if (hasHR) match.homeRedCards = parseInt(cols[col['HR']], 10) || 0;
+                if (hasAR) match.awayRedCards = parseInt(cols[col['AR']], 10) || 0;
+
+                globalMatches.push(match);
+
+                // Store odds data for this match (matching reference's column names)
+                const oddsKey = `${homeTeam} vs ${awayTeam}`;
+                const odds = {};
+                if (hasB365H) { const v = parseNumber(cols[col['B365H']]); if (v && v >= 1.01) odds.B365H = v; }
+                if (hasB365D) { const v = parseNumber(cols[col['B365D']]); if (v && v >= 1.01) odds.B365D = v; }
+                if (hasB365A) { const v = parseNumber(cols[col['B365A']]); if (v && v >= 1.01) odds.B365A = v; }
+                if (hasAvgH) { const v = parseNumber(cols[col['AvgH']]); if (v && v >= 1.01) odds.AvgH = v; }
+                if (hasAvgD) { const v = parseNumber(cols[col['AvgD']]); if (v && v >= 1.01) odds.AvgD = v; }
+                if (hasAvgA) { const v = parseNumber(cols[col['AvgA']]); if (v && v >= 1.01) odds.AvgA = v; }
+                if (hasB365O25) { const v = parseNumber(cols[col['B365>2.5']]); if (v && v >= 1.01) odds.B365O25 = v; }
+                if (hasAvgO25) { const v = parseNumber(cols[col['Avg>2.5']]); if (v && v >= 1.01) odds.AvgO25 = v; }
+                if (hasPSO25) { const v = parseNumber(cols[col['P>2.5']]); if (v && v >= 1.01) odds.PSO25 = v; }
+                if (hasMaxO25) { const v = parseNumber(cols[col['Max>2.5']]); if (v && v >= 1.01) odds.MaxO25 = v; }
+                if (hasBFEH) { const v = parseNumber(cols[col['BFEH']]); if (v && v >= 1.01) odds.BFEH = v; }
+                if (hasBFED) { const v = parseNumber(cols[col['BFED']]); if (v && v >= 1.01) odds.BFED = v; }
+                if (hasBFEA) { const v = parseNumber(cols[col['BFEA']]); if (v && v >= 1.01) odds.BFEA = v; }
+                if (hasBFE25) { const v = parseNumber(cols[col['BFE>2.5']]); if (v && v >= 1.01) odds.BFEO25 = v; }
+                if (hasBFEU25) { const v = parseNumber(cols[col['BFE<2.5']]); if (v && v >= 1.01) odds.BFEO25U = v; }
+
+                // Derive BTTS odds from 1X2 (Poisson approximation)
+                if (odds.B365H && odds.B365D && odds.B365A) {
+                    const pHome = 1 / odds.B365H;
+                    const pDraw = 1 / odds.B365D;
+                    const pAway = 1 / odds.B365A;
+                    const pHomeCS = pHome + pDraw * 0.55;
+                    const pAwayCS = pAway + pDraw * 0.45;
+                    const pBTTS = Math.max(0, 1 - pHomeCS) * Math.max(0, 1 - pAwayCS);
+                    const bttsOdds = pBTTS > 0.01 ? (1 / pBTTS) : null;
+                    if (bttsOdds && bttsOdds >= 1.01) odds.B365BTTS = parseFloat(bttsOdds.toFixed(2));
+                }
+
+                // Derive O1.5 and O3.5 from O2.5 (heuristic scaling)
+                if (odds.B365O25) {
+                    const o15 = odds.B365O25 * 0.55;
+                    const o35 = odds.B365O25 * 1.65;
+                    if (o15 >= 1.01) odds.B365O15 = parseFloat(o15.toFixed(2));
+                    if (o35 >= 1.01) odds.B365O35 = parseFloat(o35.toFixed(2));
+                }
+
+                if (Object.keys(odds).length > 0) {
+                    matchOddsData[oddsKey] = odds;
+                }
+            }
+
+            // Show warning if Div filter skipped rows (redirect detected)
+            if (skippedWrongDiv > 0) {
+                console.warn(`[Techmari] Skipped ${skippedWrongDiv} rows with wrong Div (likely redirect contamination)`);
+            }
+
+            if (globalMatches.length === 0) {
+                statusArea.innerText = 'No valid match data found. The season may not exist yet or all rows were filtered.';
+                statusArea.style.color = '#dc3545';
+                return;
+            }
+
+            // Also store reverse key for H2H lookups
+            for (const key in matchOddsData) {
+                const parts = key.split(' vs ');
+                if (parts.length === 2) {
+                    const revKey = `${parts[1]} vs ${parts[0]}`;
+                    if (!matchOddsData[revKey]) matchOddsData[revKey] = matchOddsData[key];
+                }
+            }
+
+            // Sort matches by date
+            globalMatches.sort((a, b) => parseDateForSort(a.date) - parseDateForSort(b.date));
+
+            renderTable(statusArea, downloadBtn, tableContainer, tableBody);
+        }
+
+        // ============================================================
+        // Fetch with CORS proxy fallback
+        // Reference techmari uses server-side fetch (no CORS).
+        // For standalone HTML we try: direct -> corsproxy.io -> allorigins.win
+        // If all fail, guide user to download CSV manually.
+        // ============================================================
         async function fetchFootballData() {
             const league = document.getElementById('leagueSelect').value;
             const season = document.getElementById('seasonSelect').value;
@@ -918,196 +1147,49 @@
 
             const baseUrl = `https://www.football-data.co.uk/mmz4281/${season}/${league}.csv`;
 
-            // CORS proxy list — try direct first, then proxies in order
             const proxyUrls = [
-                '',  // direct fetch first
-                'https://corsproxy.io/?',
-                'https://api.allorigins.win/raw?url='
+                ['', 'Direct'],
+                ['https://corsproxy.io/?', 'corsproxy.io'],
+                ['https://api.allorigins.win/raw?url=', 'allorigins.win']
             ];
 
             let csvText = null;
-            let lastError = null;
+            let usedProxy = 'none';
 
-            for (const proxy of proxyUrls) {
+            for (const [proxy, name] of proxyUrls) {
                 const url = proxy ? proxy + encodeURIComponent(baseUrl) : baseUrl;
                 try {
-                    statusArea.innerText = `Fetching ${LEAGUE_NAMES[league] || league} ${season} data...`;
-                    const response = await fetch(url);
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    csvText = await response.text();
-                    if (csvText && csvText.includes('HomeTeam')) break;
-                    csvText = null;
-                } catch (err) {
-                    lastError = err;
+                    statusArea.innerText = `Trying ${name}...`;
+                    const response = await fetch(url, {
+                        headers: { 'Accept': 'text/csv,text/plain,*/*' }
+                    });
+                    if (!response.ok) continue;
+                    const text = await response.text();
+                    // Validate: must contain the HomeTeam header
+                    if (text && text.includes('HomeTeam')) {
+                        csvText = text;
+                        usedProxy = name;
+                        break;
+                    }
+                } catch (e) {
+                    // Try next proxy
                 }
             }
 
             if (csvText) {
+                statusArea.innerText = `Loaded via ${usedProxy}. Processing...`;
                 parseFootballDataCSV(csvText, league, season, statusArea, downloadBtn, tableContainer, tableBody);
             } else {
-                statusArea.innerHTML = `Error: Could not fetch data. This is likely a CORS restriction.<br><br><strong>Quick fix:</strong> <a href="${baseUrl}" target="_blank" style="color:#0056b3;">Click here to open the CSV</a>, save it, then use <em>Switch to manual paste / CSV upload</em> below to load it.<br><span style="font-size:11px;color:#6c757d;">(Proxy error: ${lastError ? lastError.message : 'unknown'})</span>`;
+                statusArea.innerHTML = `
+                    <strong>CORS blocked</strong> — browser cannot fetch directly from football-data.co.uk.<br><br>
+                    <strong>Option 1:</strong> <a href="${baseUrl}" target="_blank" style="color:#0056b3;font-weight:bold;">Download CSV</a>, then click <em>"Upload CSV"</em> below.<br>
+                    <strong>Option 2:</strong> Host this HTML on a server with a proxy route (like the Next.js techmari app does).<br>
+                    <span style="font-size:11px;color:#6c757d;">Reference: techmari uses server-side fetch in Next.js API routes to avoid CORS entirely.</span>`;
                 statusArea.style.color = '#dc3545';
             }
 
             fetchBtn.disabled = false;
             fetchBtn.innerText = 'Load Data';
-        }
-
-        function parseFootballDataCSV(csvText, leagueCode, season, statusArea, downloadBtn, tableContainer, tableBody) {
-            const lines = csvText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-            if (lines.length < 2) {
-                statusArea.innerText = 'No data found for this league/season.';
-                statusArea.style.color = '#dc3545';
-                return;
-            }
-
-            // Parse header to build column index map
-            const headers = lines[0].split(',').map(h => h.trim().replace(/^\uFEFF/, ''));
-            const col = {};
-            headers.forEach((h, i) => { col[h] = i; });
-
-            // Required columns
-            const reqCols = ['Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG'];
-            for (const rc of reqCols) {
-                if (!(rc in col)) {
-                    statusArea.innerText = `CSV missing required column: ${rc}`;
-                    statusArea.style.color = '#dc3545';
-                    return;
-                }
-            }
-
-            const hasFTR = 'FTR' in col;
-            const hasTime = 'Time' in col;
-            const hasOddsB365O25 = 'B365>2.5' in col;
-            const hasOddsAvgO25 = 'Avg>2.5' in col;
-            const hasOddsPSO25 = 'P>2.5' in col;
-            const hasOddsMaxO25 = 'Max>2.5' in col;
-            const hasB365H = 'B365H' in col;
-            const hasB365D = 'B365D' in col;
-            const hasB365A = 'B365A' in col;
-            const hasBFEH = 'BFEH' in col;
-            const hasBFED = 'BFED' in col;
-            const hasBFEA = 'BFEA' in col;
-            const hasBFE25 = 'BFE>2.5' in col;
-            const hasBFEU25 = 'BFE<2.5' in col;
-            const hasHS = 'HS' in col;
-            const hasAS = 'AS' in col;
-            const hasHST = 'HST' in col;
-            const hasAST = 'AST' in col;
-            const hasHC = 'HC' in col;
-            const hasAC = 'AC' in col;
-
-            // Show odds badge if odds data exists
-            const hasAnyOdds = hasB365H || hasOddsAvgO25;
-            document.getElementById('oddsSourceBadge').style.display = hasAnyOdds ? 'inline-block' : 'none';
-
-            const leagueName = LEAGUE_NAMES[leagueCode] || leagueCode;
-            globalMatches = [];
-            matchOddsData = {};
-
-            for (let i = 1; i < lines.length; i++) {
-                const cols = lines[i].split(',');
-                if (cols.length < 5) continue;
-
-                const homeTeam = (cols[col['HomeTeam']] || '').trim();
-                const awayTeam = (cols[col['AwayTeam']] || '').trim();
-                if (!homeTeam || !awayTeam) continue;
-
-                const homeScore = parseInt(cols[col['FTHG']]);
-                const awayScore = parseInt(cols[col['FTAG']]);
-                if (isNaN(homeScore) || isNaN(awayScore)) continue;
-
-                // Parse date: football-data.co.uk uses DD/MM/YYYY
-                const rawDate = (cols[col['Date']] || '').trim();
-                const date = formatDateFromUK(rawDate);
-
-                const ftr = hasFTR ? (cols[col['FTR']] || '').trim() : '';
-                const time = hasTime ? (cols[col['Time']] || '').trim() : '';
-
-                const match = {
-                    league: leagueName,
-                    round: '',
-                    date: date,
-                    homeTeam: homeTeam,
-                    awayTeam: awayTeam,
-                    homeScore: homeScore,
-                    awayScore: awayScore,
-                    ftr: ftr,
-                    time: time,
-                    notes: 'football-data.co.uk'
-                };
-
-                // Store extra stats if available
-                if (hasHS) match.homeShots = parseInt(cols[col['HS']]) || 0;
-                if (hasAS) match.awayShots = parseInt(cols[col['AS']]) || 0;
-                if (hasHST) match.homeShotsOnTarget = parseInt(cols[col['HST']]) || 0;
-                if (hasAST) match.awayShotsOnTarget = parseInt(cols[col['AST']]) || 0;
-                if (hasHC) match.homeCorners = parseInt(cols[col['HC']]) || 0;
-                if (hasAC) match.awayCorners = parseInt(cols[col['AC']]) || 0;
-
-                globalMatches.push(match);
-
-                // Store odds data for this match
-                const oddsKey = `${homeTeam} vs ${awayTeam}`;
-                const odds = {};
-                if (hasOddsB365O25) { const v = parseFloat(cols[col['B365>2.5']]); if (v >= 1.01) odds.B365O25 = v; }
-                if (hasOddsAvgO25) { const v = parseFloat(cols[col['Avg>2.5']]); if (v >= 1.01) odds.AvgO25 = v; }
-                if (hasOddsPSO25) { const v = parseFloat(cols[col['P>2.5']]); if (v >= 1.01) odds.PSO25 = v; }
-                if (hasOddsMaxO25) { const v = parseFloat(cols[col['Max>2.5']]); if (v >= 1.01) odds.MaxO25 = v; }
-                if (hasB365H) { const v = parseFloat(cols[col['B365H']]); if (v >= 1.01) odds.B365H = v; }
-                if (hasB365D) { const v = parseFloat(cols[col['B365D']]); if (v >= 1.01) odds.B365D = v; }
-                if (hasB365A) { const v = parseFloat(cols[col['B365A']]); if (v >= 1.01) odds.B365A = v; }
-                if (hasBFEH) { const v = parseFloat(cols[col['BFEH']]); if (v >= 1.01) odds.BFEH = v; }
-                if (hasBFED) { const v = parseFloat(cols[col['BFED']]); if (v >= 1.01) odds.BFED = v; }
-                if (hasBFEA) { const v = parseFloat(cols[col['BFEA']]); if (v >= 1.01) odds.BFEA = v; }
-                if (hasBFE25) { const v = parseFloat(cols[col['BFE>2.5']]); if (v >= 1.01) odds.BFEO25 = v; }
-                if (hasBFEU25) { const v = parseFloat(cols[col['BFE<2.5']]); if (v >= 1.01) odds.BFEO25U = v; }
-
-                // Derive implied probability for BTTS from 1X2 odds (Poisson-based approximation)
-                if (odds.B365H && odds.B365D && odds.B365A) {
-                    const pHome = 1 / odds.B365H;
-                    const pDraw = 1 / odds.B365D;
-                    const pAway = 1 / odds.B365A;
-                    // Rough home clean sheet prob: P(home win) + fraction of draw
-                    const pHomeCS = pHome + pDraw * 0.55;
-                    const pAwayCS = pAway + pDraw * 0.45;
-                    const pBTTS = Math.max(0, 1 - pHomeCS) * Math.max(0, 1 - pAwayCS);
-                    const bttsOdds = pBTTS > 0.01 ? (1 / pBTTS) : null;
-                    if (bttsOdds && bttsOdds >= 1.01) odds.B365BTTS = parseFloat(bttsOdds.toFixed(2));
-                }
-
-                // Derive O1.5 and O3.5 from O2.5 odds (heuristic scaling)
-                if (odds.B365O25) {
-                    const o15 = odds.B365O25 * 0.55;
-                    const o35 = odds.B365O25 * 1.65;
-                    if (o15 >= 1.01) odds.B365O15 = parseFloat(o15.toFixed(2));
-                    if (o35 >= 1.01) odds.B365O35 = parseFloat(o35.toFixed(2));
-                }
-
-                if (Object.keys(odds).length > 0) {
-                    matchOddsData[oddsKey] = odds;
-                }
-            }
-
-            // Also store reverse key for H2H lookups
-            for (const key in matchOddsData) {
-                const parts = key.split(' vs ');
-                if (parts.length === 2) {
-                    const revKey = `${parts[1]} vs ${parts[0]}`;
-                    if (!matchOddsData[revKey]) {
-                        matchOddsData[revKey] = matchOddsData[key];
-                    }
-                }
-            }
-
-            // Sort matches by date (newest format DD/MM/YYYY)
-            globalMatches.sort((a, b) => {
-                const da = parseDateForSort(a.date);
-                const db = parseDateForSort(b.date);
-                return da - db;
-            });
-
-            renderTable(statusArea, downloadBtn, tableContainer, tableBody);
         }
 
         /**
@@ -1258,16 +1340,34 @@
             const reader = new FileReader();
             reader.onload = function(e) {
                 const text = e.target.result;
-                const rows = text.split('\n').filter(row => row.trim() !== "");
-                globalMatches = [];
-                for (let i = 1; i < rows.length; i++) {
-                    const cols = rows[i].split(',');
-                    if (cols.length >= 5) {
-                        const clean = (str) => str ? str.replace(/"/g, '').trim() : "";
-                        globalMatches.push({ date: clean(cols[0]), homeTeam: clean(cols[1]), awayTeam: clean(cols[2]), homeScore: parseInt(clean(cols[3])), awayScore: parseInt(clean(cols[4])), league: "Imported", round: "Unknown" });
+                // Auto-detect: if the CSV has a 'HomeTeam' header, it's a football-data.co.uk CSV
+                const firstLine = text.split('\n')[0].replace(/^\uFEFF/, '');
+                if (firstLine.includes('HomeTeam')) {
+                    // Use the robust football-data.co.uk parser
+                    // Auto-detect league code from first data row's Div column
+                    const headers = parseCsvLine(firstLine);
+                    const col = {};
+                    headers.forEach((h, i) => { col[h] = i; });
+                    const dataLines = text.trim().split('\n');
+                    let detectedLeague = '';
+                    if (col['Div'] !== undefined && dataLines.length > 1) {
+                        const firstRow = parseCsvLine(dataLines[1]);
+                        detectedLeague = (firstRow[col['Div']] || '').trim();
                     }
+                    parseFootballDataCSV(text, detectedLeague, 'uploaded', statusArea, downloadBtn, tableContainer, tableBody);
+                } else {
+                    // Legacy simple CSV format: Date,Home,Away,HomeScore,AwayScore
+                    const rows = text.split('\n').filter(row => row.trim() !== "");
+                    globalMatches = [];
+                    for (let i = 1; i < rows.length; i++) {
+                        const cols = rows[i].split(',');
+                        if (cols.length >= 5) {
+                            const clean = (str) => str ? str.replace(/"/g, '').trim() : "";
+                            globalMatches.push({ date: clean(cols[0]), homeTeam: clean(cols[1]), awayTeam: clean(cols[2]), homeScore: parseInt(clean(cols[3])), awayScore: parseInt(clean(cols[4])), league: "Imported", round: "Unknown" });
+                        }
+                    }
+                    renderTable(statusArea, downloadBtn, tableContainer, tableBody);
                 }
-                renderTable(statusArea, downloadBtn, tableContainer, tableBody);
             };
             reader.readAsText(file); event.target.value = '';
         }
