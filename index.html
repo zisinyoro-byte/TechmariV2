@@ -1759,7 +1759,6 @@
             document.getElementById('bttsProb').innerText = bttsProb.toFixed(1) + "%";
             document.getElementById('predictionResults').classList.remove('hidden'); document.getElementById('exportPredictionBtn').disabled = false;
             lastPredictionData = { homeTeam, awayTeam, homeWinProb: ((homeWins / iterations) * 100), drawProb: ((draws / iterations) * 100), awayWinProb: ((awayWins / iterations) * 100), homeXg: lambdaHome, awayXg: lambdaAway, likelyScore, likelyScoreProb: ((maxFreq/iterations)*100), over15Prob, over25Prob, over35Prob, bttsProb };
-            autoFillOddsFromData(homeTeam, awayTeam);
             runDeviationAnalysis(homeTeam, awayTeam); runZScoreAnalysis(homeTeam, awayTeam); evaluateSweetSpot(); renderMarketRecommendation(lastPredictionData);
         }
 
