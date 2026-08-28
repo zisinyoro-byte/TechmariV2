@@ -476,6 +476,53 @@
         }
         .btn-fetch:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,86,179,0.3); }
         .btn-fetch:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .datasource-row select[multiple] {
+            height: 120px;
+            overflow-y: auto;
+            padding: 6px 8px;
+        }
+        .datasource-row select[multiple] option {
+            padding: 3px 6px;
+            border-radius: 3px;
+            margin: 1px 0;
+        }
+        .datasource-row select[multiple] option:checked {
+            background: #0056b3;
+            color: #fff;
+        }
+        .multi-hint {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 2px;
+            font-style: italic;
+        }
+        .fetch-progress {
+            width: 100%;
+            max-width: 400px;
+            height: 6px;
+            background: #dee2e6;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 10px auto 0;
+            display: none;
+        }
+        .fetch-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #0056b3, #28a745);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+        .season-count-badge {
+            display: inline-block;
+            background: #0056b3;
+            color: #fff;
+            font-size: 11px;
+            padding: 1px 8px;
+            border-radius: 10px;
+            margin-left: 6px;
+            font-weight: 600;
+        }
         .datasource-info {
             font-size: 12px;
             color: #6c757d;
@@ -544,10 +591,10 @@
                         <option value="PO">Polish Ekstraklasa</option>
                     </select>
                 </div>
-                <div class="control-group">
-                    <label>Season</label>
-                    <select id="seasonSelect">
-                        <option value="2627">2026/27 (Current)</option>
+                <div class="control-group" style="flex:1.5;">
+                    <label>Season(s) <span id="seasonCountBadge" class="season-count-badge" style="display:none;">1</span></label>
+                    <select id="seasonSelect" multiple>
+                        <option value="2627" selected>2026/27 (Current)</option>
                         <option value="2526">2025/26</option>
                         <option value="2425">2024/25</option>
                         <option value="2324">2023/24</option>
@@ -575,11 +622,15 @@
                         <option value="0102">2001/02</option>
                         <option value="0001">2000/01</option>
                     </select>
+                    <div class="multi-hint">Hold Ctrl/Cmd + click to select multiple seasons</div>
                 </div>
                 <div class="control-group" style="flex: 0 0 auto;">
                     <label>&nbsp;</label>
                     <button id="fetchBtn" class="btn-fetch" onclick="fetchFootballData()">Load Data</button>
                 </div>
+            </div>
+            <div class="fetch-progress" id="fetchProgress">
+                <div class="fetch-progress-bar" id="fetchProgressBar"></div>
             </div>
             <div class="datasource-info">
                 Powered by <a href="https://www.football-data.co.uk/" target="_blank">football-data.co.uk</a> — Free CSV data with match results, statistics & betting odds.
@@ -902,6 +953,24 @@
             }
         }
 
+        // Update season count badge when selection changes
+        document.getElementById('seasonSelect').addEventListener('change', function() {
+            const count = this.selectedOptions.length;
+            const badge = document.getElementById('seasonCountBadge');
+            if (count > 1) {
+                badge.style.display = 'inline-block';
+                badge.innerText = count + ' seasons';
+            } else {
+                badge.style.display = 'none';
+            }
+        });
+
+        // Convert season code like "2425" to "24/25"
+        function formatSeasonLabel(seasonCode) {
+            if (!seasonCode || seasonCode.length < 4) return seasonCode;
+            return seasonCode.substring(0, 2) + '/' + seasonCode.substring(2, 4);
+        }
+
         // ============================================================
         // Robust CSV parser — ported from techmari data-cache.ts
         // Handles: BOM, quoted fields, Div validation (redirect protection)
@@ -925,12 +994,14 @@
             return isNaN(n) ? null : n;
         }
 
-        function parseFootballDataCSV(csvText, leagueCode, season, statusArea, downloadBtn, tableContainer, tableBody) {
+        function parseFootballDataCSV(csvText, leagueCode, season, statusArea, downloadBtn, tableContainer, tableBody, append) {
             const lines = csvText.trim().split('\n');
             if (lines.length < 2) {
-                statusArea.innerText = 'No data found for this league/season.';
-                statusArea.style.color = '#dc3545';
-                return;
+                if (!append) {
+                    statusArea.innerText = 'No data found for this league/season.';
+                    statusArea.style.color = '#dc3545';
+                }
+                return 0;
             }
 
             // Handle BOM (\uFEFF) at start of header — same as reference
@@ -943,9 +1014,11 @@
             const reqCols = ['Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG'];
             for (const rc of reqCols) {
                 if (!(rc in col)) {
-                    statusArea.innerText = `CSV missing required column: ${rc}`;
-                    statusArea.style.color = '#dc3545';
-                    return;
+                    if (!append) {
+                        statusArea.innerText = `CSV missing required column: ${rc}`;
+                        statusArea.style.color = '#dc3545';
+                    }
+                    return 0;
                 }
             }
 
@@ -988,11 +1061,14 @@
             const hasHTR = col['HTR'] !== undefined;
 
             const hasAnyOdds = hasB365H || hasAvgO25;
-            document.getElementById('oddsSourceBadge').style.display = hasAnyOdds ? 'inline-block' : 'none';
-
+            if (!append) {
+                document.getElementById('oddsSourceBadge').style.display = hasAnyOdds ? 'inline-block' : 'none';
+                globalMatches = [];
+                matchOddsData = {};
+            } else if (hasAnyOdds) {
+                document.getElementById('oddsSourceBadge').style.display = 'inline-block';
+            }
             const leagueName = LEAGUE_NAMES[leagueCode] || leagueCode;
-            globalMatches = [];
-            matchOddsData = {};
             let skippedWrongDiv = 0;
 
             for (let i = 1; i < lines.length; i++) {
@@ -1022,7 +1098,7 @@
                 const time = hasTime ? (cols[col['Time']] || '').trim() : '';
 
                 const match = {
-                    league: leagueName,
+                    league: leagueName + (append ? ' ' + formatSeasonLabel(season) : ''),
                     round: '',
                     date: date,
                     homeTeam: homeTeam,
@@ -1104,12 +1180,6 @@
                 console.warn(`[Techmari] Skipped ${skippedWrongDiv} rows with wrong Div (likely redirect contamination)`);
             }
 
-            if (globalMatches.length === 0) {
-                statusArea.innerText = 'No valid match data found. The season may not exist yet or all rows were filtered.';
-                statusArea.style.color = '#dc3545';
-                return;
-            }
-
             // Also store reverse key for H2H lookups
             for (const key in matchOddsData) {
                 const parts = key.split(' vs ');
@@ -1122,7 +1192,16 @@
             // Sort matches by date
             globalMatches.sort((a, b) => parseDateForSort(a.date) - parseDateForSort(b.date));
 
-            renderTable(statusArea, downloadBtn, tableContainer, tableBody);
+            if (!append) {
+                if (globalMatches.length === 0) {
+                    statusArea.innerText = 'No valid match data found. The season may not exist yet or all rows were filtered.';
+                    statusArea.style.color = '#dc3545';
+                    return 0;
+                }
+                renderTable(statusArea, downloadBtn, tableContainer, tableBody);
+            }
+
+            return globalMatches.length;
         }
 
         // ============================================================
@@ -1133,77 +1212,131 @@
         // ============================================================
         async function fetchFootballData() {
             const league = document.getElementById('leagueSelect').value;
-            const season = document.getElementById('seasonSelect').value;
+            const seasonEl = document.getElementById('seasonSelect');
+            const selectedSeasons = Array.from(seasonEl.selectedOptions).map(o => o.value);
+
+            if (selectedSeasons.length === 0) {
+                document.getElementById('statusArea').innerText = 'Please select at least one season.';
+                document.getElementById('statusArea').style.color = '#dc3545';
+                return;
+            }
+
             const fetchBtn = document.getElementById('fetchBtn');
             const statusArea = document.getElementById('statusArea');
             const tableBody = document.querySelector('#resultsTable tbody');
             const downloadBtn = document.getElementById('downloadBtn');
             const tableContainer = document.querySelector('.table-wrapper');
+            const progressBar = document.getElementById('fetchProgressBar');
+            const progressContainer = document.getElementById('fetchProgress');
+            const leagueName = LEAGUE_NAMES[league] || league;
+            const isMulti = selectedSeasons.length > 1;
 
             fetchBtn.disabled = true;
             fetchBtn.innerText = 'Loading...';
-            statusArea.innerText = `Fetching ${LEAGUE_NAMES[league] || league} ${season} data...`;
             statusArea.style.color = '#0056b3';
 
-            const baseUrl = `https://www.football-data.co.uk/mmz4281/${season}/${league}.csv`;
-            let csvText = null;
-            let usedProxy = 'none';
+            // Reset data fresh
+            globalMatches = [];
+            matchOddsData = {};
+            tableBody.innerHTML = '';
 
-            // --- Strategy 1: Vercel serverless proxy (production, no CORS) ---
-            try {
-                statusArea.innerText = 'Fetching via server proxy...';
-                const apiResponse = await fetch(`/api/fetch-data?league=${encodeURIComponent(league)}&season=${encodeURIComponent(season)}`);
-                if (apiResponse.ok) {
-                    const text = await apiResponse.text();
-                    if (text && text.includes('HomeTeam')) {
-                        csvText = text;
-                        usedProxy = 'server proxy';
-                    }
-                } else {
-                    const errData = await apiResponse.json().catch(() => null);
-                    console.warn('[fetchFootballData] API proxy error:', apiResponse.status, errData);
-                }
-            } catch (e) {
-                // API route not available (e.g. local file:// dev), fall through to CORS proxies
-                console.warn('[fetchFootballData] API proxy unavailable, trying CORS fallbacks:', e.message);
+            // Show progress bar for multi-season
+            if (isMulti) {
+                progressContainer.style.display = 'block';
+                progressBar.style.width = '0%';
             }
 
-            // --- Strategy 2: CORS proxy fallbacks (for local dev without Vercel) ---
-            if (!csvText) {
-                const proxyUrls = [
-                    ['https://corsproxy.io/?', 'corsproxy.io'],
-                    ['https://api.allorigins.win/raw?url=', 'allorigins.win']
-                ];
+            let totalLoaded = 0;
+            let failedSeasons = [];
 
-                for (const [proxy, name] of proxyUrls) {
-                    const url = proxy + encodeURIComponent(baseUrl);
-                    try {
-                        statusArea.innerText = `Trying ${name}...`;
-                        const response = await fetch(url, {
-                            headers: { 'Accept': 'text/csv,text/plain,*/*' }
-                        });
-                        if (!response.ok) continue;
-                        const text = await response.text();
+            for (let i = 0; i < selectedSeasons.length; i++) {
+                const season = selectedSeasons[i];
+                const seasonLabel = seasonEl.querySelector(`option[value="${season}"]`).innerText;
+                const baseUrl = `https://www.football-data.co.uk/mmz4281/${season}/${league}.csv`;
+
+                if (isMulti) {
+                    statusArea.innerText = `Fetching ${leagueName} ${seasonLabel} (${i + 1}/${selectedSeasons.length})...`;
+                    progressBar.style.width = `${((i) / selectedSeasons.length) * 100}%`;
+                } else {
+                    statusArea.innerText = `Fetching ${leagueName} ${seasonLabel}...`;
+                }
+
+                let csvText = null;
+
+                // --- Strategy 1: Vercel serverless proxy (production, no CORS) ---
+                try {
+                    const apiResponse = await fetch(`/api/fetch-data?league=${encodeURIComponent(league)}&season=${encodeURIComponent(season)}`);
+                    if (apiResponse.ok) {
+                        const text = await apiResponse.text();
                         if (text && text.includes('HomeTeam')) {
                             csvText = text;
-                            usedProxy = name;
-                            break;
                         }
-                    } catch (e) {
-                        // Try next proxy
                     }
+                } catch (e) {
+                    console.warn(`[fetchFootballData] API proxy unavailable for ${season}:`, e.message);
+                }
+
+                // --- Strategy 2: CORS proxy fallbacks (for local dev) ---
+                if (!csvText) {
+                    const proxyUrls = [
+                        ['https://corsproxy.io/?', 'corsproxy.io'],
+                        ['https://api.allorigins.win/raw?url=', 'allorigins.win']
+                    ];
+                    for (const [proxy, name] of proxyUrls) {
+                        const url = proxy + encodeURIComponent(baseUrl);
+                        try {
+                            const response = await fetch(url, {
+                                headers: { 'Accept': 'text/csv,text/plain,*/*' }
+                            });
+                            if (!response.ok) continue;
+                            const text = await response.text();
+                            if (text && text.includes('HomeTeam')) {
+                                csvText = text;
+                                break;
+                            }
+                        } catch (e) { /* try next */ }
+                    }
+                }
+
+                if (csvText) {
+                    const countBefore = globalMatches.length;
+                    parseFootballDataCSV(csvText, league, season, statusArea, downloadBtn, tableContainer, tableBody, true);
+                    const added = globalMatches.length - countBefore;
+                    totalLoaded += added;
+                    console.log(`[Techmari] ${leagueName} ${seasonLabel}: +${added} matches (total: ${globalMatches.length})`);
+                } else {
+                    failedSeasons.push(seasonLabel);
+                    console.warn(`[Techmari] Failed to load ${leagueName} ${seasonLabel}`);
+                }
+
+                // Rate-limit: wait 600ms between requests to be respectful
+                if (i < selectedSeasons.length - 1) {
+                    await new Promise(r => setTimeout(r, 600));
                 }
             }
 
-            if (csvText) {
-                statusArea.innerText = `Loaded via ${usedProxy}. Processing...`;
-                parseFootballDataCSV(csvText, league, season, statusArea, downloadBtn, tableContainer, tableBody);
+            // Complete progress bar
+            if (isMulti) {
+                progressBar.style.width = '100%';
+                setTimeout(() => { progressContainer.style.display = 'none'; }, 800);
+            }
+
+            // Final sort by date across all seasons
+            globalMatches.sort((a, b) => parseDateForSort(a.date) - parseDateForSort(b.date));
+
+            if (globalMatches.length > 0) {
+                let msg = `Loaded ${totalLoaded.toLocaleString()} matches from ${selectedSeasons.length - failedSeasons.length} season(s).`;
+                if (failedSeasons.length > 0) {
+                    msg += ` Failed: ${failedSeasons.join(', ')}.`;
+                }
+                statusArea.innerText = msg;
+                statusArea.style.color = '#28a745';
+                renderTable(statusArea, downloadBtn, tableContainer, tableBody, msg);
             } else {
                 statusArea.innerHTML = `
-                    <strong>Failed to load data</strong> — all fetch methods failed.<br><br>
-                    <strong>Option 1:</strong> <a href="${baseUrl}" target="_blank" style="color:#0056b3;font-weight:bold;">Download CSV manually</a>, then use <em>"Upload CSV"</em>.<br>
-                    <strong>Option 2:</strong> Make sure this is deployed on Vercel (the server proxy only works on Vercel).<br>
-                    <span style="font-size:11px;color:#6c757d;">On Vercel, the /api/fetch-data serverless function proxies requests to football-data.co.uk server-side, avoiding CORS.</span>`;
+                    <strong>Failed to load data</strong> for all selected seasons.<br><br>
+                    <strong>Option 1:</strong> <a href="https://www.football-data.co.uk/mmz4281/${selectedSeasons[0]}/${league}.csv" target="_blank" style="color:#0056b3;font-weight:bold;">Download CSV manually</a>, then use <em>"Upload CSV"</em>.<br>
+                    <strong>Option 2:</strong> Make sure this is deployed on Vercel (server proxy only works on Vercel).`;
                 statusArea.style.color = '#dc3545';
             }
 
@@ -1391,9 +1524,10 @@
             reader.readAsText(file); event.target.value = '';
         }
 
-        function renderTable(statusArea, downloadBtn, tableContainer, tableBody) {
+        function renderTable(statusArea, downloadBtn, tableContainer, tableBody, customMsg) {
             if (globalMatches.length > 0) {
-                statusArea.innerText = `Successfully processed ${globalMatches.length} matches. System Ready.`; statusArea.style.color = "#28a745";
+                statusArea.innerText = customMsg || `Successfully processed ${globalMatches.length} matches. System Ready.`;
+                statusArea.style.color = "#28a745";
                 downloadBtn.disabled = false; tableContainer.classList.remove('hidden'); const mainDl = document.getElementById('mainDownloadBtn'); if (mainDl) mainDl.disabled = false;
                 const hasFTR = globalMatches.length > 0 && globalMatches[0].ftr !== undefined;
                 const headerRow = tableBody.parentElement.querySelector('thead tr');
