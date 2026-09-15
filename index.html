@@ -558,10 +558,20 @@
 <body>
     <div class="container">
         <h2>Techmari Pro FP2</h2>
-        <p>Statistical Data Processor & Prediction Engine <span style='font-size:11px;color:#6c757d;'>— Powered by football-data.co.uk</span></p>
+        <p>Statistical Data Processor & Prediction Engine <span style='font-size:11px;color:#6c757d;'>— Powered by football-data.co.uk & OpenFootball</span></p>
         <!-- football-data.co.uk Data Source -->
         <div class="datasource-panel" id="datasourcePanel">
             <h3>Step 1: Select League & Season</h3>
+            <div class="datasource-row" style="margin-bottom: 4px;">
+                <div class="control-group" style="max-width: 440px;">
+                    <label>Data Source</label>
+                    <select id="dataSourceSelect" onchange="onDataSourceChange()">
+                        <option value="fd" selected>football-data.co.uk — CSV + betting odds</option>
+                        <option value="of">OpenFootball (GitHub) — JSON, no odds</option>
+                    </select>
+                    <div class="multi-hint" id="dataSourceHint">Includes results, match statistics & bookmaker odds (B365/Pinnacle/Avg).</div>
+                </div>
+            </div>
             <div class="datasource-row">
                 <div class="control-group">
                     <label>League</label>
@@ -626,14 +636,14 @@
                 </div>
                 <div class="control-group" style="flex: 0 0 auto;">
                     <label>&nbsp;</label>
-                    <button id="fetchBtn" class="btn-fetch" onclick="fetchFootballData()">Load Data</button>
+                    <button id="fetchBtn" class="btn-fetch" onclick="loadDataFromSource()">Load Data</button>
                 </div>
             </div>
             <div class="fetch-progress" id="fetchProgress">
                 <div class="fetch-progress-bar" id="fetchProgressBar"></div>
             </div>
             <div class="datasource-info">
-                Powered by <a href="https://www.football-data.co.uk/" target="_blank">football-data.co.uk</a> — Free CSV data with match results, statistics & betting odds.
+                <span id="dataSourceInfoText">Powered by <a href="https://www.football-data.co.uk/" target="_blank">football-data.co.uk</a> — Free CSV data with match results, statistics & betting odds.</span>
                 <span id="oddsSourceBadge" class="odds-source-badge" style="display:none;">Odds: B365/Pinnacle/Avg</span>
             </div>
             <div style="display:flex; gap:10px; justify-content:center; margin-top:12px;">
@@ -664,11 +674,11 @@
             <div class="prediction-controls">
                 <div class="control-group">
                     <label>Home Team</label>
-                    <select id="homeTeamSelect"></select>
+                    <select id="homeTeamSelect" onchange="onTeamSelectChange()"></select>
                 </div>
                 <div class="control-group">
                     <label>Away Team</label>
-                    <select id="awayTeamSelect"></select>
+                    <select id="awayTeamSelect" onchange="onTeamSelectChange()"></select>
                 </div>
                 <button onclick="runPrediction()" class="btn-predict" style="max-width: 150px;">Predict</button>
             </div>
@@ -778,6 +788,10 @@
                         <div class="stat-row"><span class="stat-label">Win Rate</span><span class="stat-value" id="homeWinRate">-</span></div>
                         <div class="stat-row"><span class="stat-label">Avg Goals Scored</span><span class="stat-value" id="homeAvgScored">-</span></div>
                         <div class="stat-row"><span class="stat-label">Avg Goals Conceded</span><span class="stat-value" id="homeAvgConc">-</span></div>
+                        <div class="stat-row"><span class="stat-label">Clean Sheet %</span><span class="stat-value" id="homeCleanSheetPct">-</span></div>
+                        <div class="stat-row"><span class="stat-label">Clean Sheets at Home</span><span class="stat-value" id="homeCleanSheetHomePct">-</span></div>
+                        <div class="stat-row"><span class="stat-label">Clean Sheets Away</span><span class="stat-value" id="homeCleanSheetAwayPct">-</span></div>
+                        <div class="stat-row"><span class="stat-label">Current CS Streak</span><span class="stat-value" id="homeCleanSheetStreak">-</span></div>
                     </div>
                     <div class="team-stat-box">
                         <div class="team-name-title" id="awayStatsName">Away Team</div>
@@ -785,6 +799,10 @@
                         <div class="stat-row"><span class="stat-label">Win Rate</span><span class="stat-value" id="awayWinRate">-</span></div>
                         <div class="stat-row"><span class="stat-label">Avg Goals Scored</span><span class="stat-value" id="awayAvgScored">-</span></div>
                         <div class="stat-row"><span class="stat-label">Avg Goals Conceded</span><span class="stat-value" id="awayAvgConc">-</span></div>
+                        <div class="stat-row"><span class="stat-label">Clean Sheet %</span><span class="stat-value" id="awayCleanSheetPct">-</span></div>
+                        <div class="stat-row"><span class="stat-label">Clean Sheets at Home</span><span class="stat-value" id="awayCleanSheetHomePct">-</span></div>
+                        <div class="stat-row"><span class="stat-label">Clean Sheets Away</span><span class="stat-value" id="awayCleanSheetAwayPct">-</span></div>
+                        <div class="stat-row"><span class="stat-label">Current CS Streak</span><span class="stat-value" id="awayCleanSheetStreak">-</span></div>
                     </div>
                 </div>
             </div>
@@ -940,6 +958,284 @@
             'P1': 'Portuguese Liga', 'T1': 'Turkish Super Lig',
             'G1': 'Greek Super League', 'PO': 'Polish Ekstraklasa'
         };
+
+        // ============================================================
+        // OpenFootball (github.com/openfootball/football.json) INTEGRATION
+        // Free open public-domain JSON match data. raw.githubusercontent.com
+        // serves CORS headers (access-control-allow-origin: *), so the browser
+        // can fetch it directly — no serverless proxy required.
+        // Note: this dataset has NO betting odds (results & rounds only).
+        // ============================================================
+
+        const OPENFOOTBALL_BASE = 'https://raw.githubusercontent.com/openfootball/football.json/master/';
+        // Techmari league code (football-data.co.uk style) -> OpenFootball file stem.
+        // null = league not published in the OpenFootball JSON dataset.
+        const OPENFOOTBALL_LEAGUES = {
+            'E0': 'en.1', 'E1': 'en.2', 'E2': 'en.3', 'E3': 'en.4', 'EC': null,
+            'SC0': 'sco.1', 'SC1': null, 'SC2': null, 'SC3': null,
+            'D1': 'de.1', 'D2': 'de.2',
+            'I1': 'it.1', 'I2': 'it.2',
+            'SP1': 'es.1', 'SP2': 'es.2',
+            'F1': 'fr.1', 'F2': 'fr.2',
+            'N1': 'nl.1', 'B1': 'be.1', 'P1': 'pt.1', 'T1': 'tr.1',
+            'G1': 'gr.1', 'PO': null
+        };
+
+        // "2425" -> "2024-25" (OpenFootball season folder format)
+        function formatOpenFootballSeason(seasonCode) {
+            if (!seasonCode || seasonCode.length !== 4) return seasonCode;
+            return '20' + seasonCode.substring(0, 2) + '-' + seasonCode.substring(2, 4);
+        }
+
+        // ISO "2025-08-15" -> "15/08/2025" (keeps parseDateForSort compatibility)
+        function formatISODateToUK(iso) {
+            const parts = (iso || '').split('-');
+            if (parts.length !== 3) return iso;
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+
+        function onDataSourceChange() {
+            const src = document.getElementById('dataSourceSelect').value;
+            const hint = document.getElementById('dataSourceHint');
+            const info = document.getElementById('dataSourceInfoText');
+            if (src === 'of') {
+                hint.innerText = 'Open public-domain JSON dataset. No betting odds — enter odds manually for Kelly analysis. Coverage varies by league/season.';
+                info.innerHTML = 'Powered by <a href="https://github.com/openfootball/football.json" target="_blank">OpenFootball</a> — free open JSON match data (results & rounds, no odds).';
+            } else {
+                hint.innerText = 'Includes results, match statistics & bookmaker odds (B365/Pinnacle/Avg).';
+                info.innerHTML = 'Powered by <a href="https://www.football-data.co.uk/" target="_blank">football-data.co.uk</a> — Free CSV data with match results, statistics & betting odds.';
+            }
+        }
+
+        // Dispatcher for the Load Data button
+        function loadDataFromSource() {
+            const src = document.getElementById('dataSourceSelect').value;
+            if (src === 'of') return fetchOpenFootballData();
+            return fetchFootballData();
+        }
+
+        function parseOpenFootballJSON(jsonText, leagueCode, season, statusArea, downloadBtn, tableContainer, tableBody, append) {
+            let data;
+            try {
+                data = JSON.parse(jsonText);
+            } catch (e) {
+                if (!append) {
+                    statusArea.innerText = 'Invalid JSON received from OpenFootball.';
+                    statusArea.style.color = '#dc3545';
+                }
+                return 0;
+            }
+            const matches = Array.isArray(data && data.matches) ? data.matches : null;
+            if (!matches || matches.length === 0) {
+                if (!append) {
+                    statusArea.innerText = 'No match data found in OpenFootball JSON.';
+                    statusArea.style.color = '#dc3545';
+                }
+                return 0;
+            }
+
+            if (!append) {
+                globalMatches = [];
+                matchOddsData = {};
+                document.getElementById('oddsSourceBadge').style.display = 'none';
+            }
+
+            const leagueName = LEAGUE_NAMES[leagueCode] || leagueCode;
+            let skippedFixtures = 0;
+
+            matches.forEach(m => {
+                // Skip upcoming fixtures (no full-time score yet)
+                const ft = m.score && Array.isArray(m.score.ft) ? m.score.ft : null;
+                if (!ft || ft.length < 2 || typeof ft[0] !== 'number' || typeof ft[1] !== 'number') { skippedFixtures++; return; }
+
+                // team1/team2 are plain strings in football.json; tolerate {name|key} objects too
+                const homeTeam = typeof m.team1 === 'string' ? m.team1 : (m.team1 && (m.team1.name || m.team1.key));
+                const awayTeam = typeof m.team2 === 'string' ? m.team2 : (m.team2 && (m.team2.name || m.team2.key));
+                if (!homeTeam || !awayTeam) return;
+
+                const homeScore = parseInt(ft[0], 10);
+                const awayScore = parseInt(ft[1], 10);
+                if (isNaN(homeScore) || isNaN(awayScore)) return;
+
+                const match = {
+                    league: leagueName + (append ? ' ' + formatSeasonLabel(season) : ''),
+                    round: m.round || '',
+                    date: formatISODateToUK(m.date),
+                    homeTeam: homeTeam,
+                    awayTeam: awayTeam,
+                    homeScore: homeScore,
+                    awayScore: awayScore,
+                    ftr: homeScore > awayScore ? 'H' : awayScore > homeScore ? 'A' : 'D',
+                    time: m.time || '',
+                    notes: 'OpenFootball'
+                };
+
+                if (m.score && Array.isArray(m.score.ht) && typeof m.score.ht[0] === 'number' && typeof m.score.ht[1] === 'number') {
+                    match.htHomeGoals = m.score.ht[0];
+                    match.htAwayGoals = m.score.ht[1];
+                }
+
+                globalMatches.push(match);
+            });
+
+            if (skippedFixtures > 0) {
+                console.log(`[Techmari] OpenFootball ${leagueCode} ${season}: skipped ${skippedFixtures} rows without a final score (upcoming fixtures)`);
+            }
+
+            globalMatches.sort((a, b) => parseDateForSort(a.date) - parseDateForSort(b.date));
+
+            if (!append) {
+                if (globalMatches.length === 0) {
+                    statusArea.innerText = 'No completed matches found in OpenFootball JSON for this season.';
+                    statusArea.style.color = '#dc3545';
+                    return 0;
+                }
+                renderTable(statusArea, downloadBtn, tableContainer, tableBody);
+            }
+
+            return globalMatches.length;
+        }
+
+        async function fetchOpenFootballData() {
+            const league = document.getElementById('leagueSelect').value;
+            const seasonEl = document.getElementById('seasonSelect');
+            const selectedSeasons = Array.from(seasonEl.selectedOptions).map(o => o.value);
+            const statusArea = document.getElementById('statusArea');
+
+            const ofLeague = OPENFOOTBALL_LEAGUES[league];
+            if (!ofLeague) {
+                statusArea.innerText = `${LEAGUE_NAMES[league] || league} is not published on OpenFootball. Switch the Data Source to football-data.co.uk for this league.`;
+                statusArea.style.color = '#dc3545';
+                return;
+            }
+
+            if (selectedSeasons.length === 0) {
+                statusArea.innerText = 'Please select at least one season.';
+                statusArea.style.color = '#dc3545';
+                return;
+            }
+
+            const fetchBtn = document.getElementById('fetchBtn');
+            const tableBody = document.querySelector('#resultsTable tbody');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const tableContainer = document.querySelector('.table-wrapper');
+            const progressBar = document.getElementById('fetchProgressBar');
+            const progressContainer = document.getElementById('fetchProgress');
+            const leagueName = LEAGUE_NAMES[league] || league;
+            const isMulti = selectedSeasons.length > 1;
+
+            fetchBtn.disabled = true;
+            fetchBtn.innerText = 'Loading...';
+            statusArea.style.color = '#0056b3';
+
+            // Reset data fresh
+            globalMatches = [];
+            matchOddsData = {};
+            tableBody.innerHTML = '';
+            document.getElementById('oddsSourceBadge').style.display = 'none';
+
+            if (isMulti) {
+                progressContainer.style.display = 'block';
+                progressBar.style.width = '0%';
+            }
+
+            let totalLoaded = 0;
+            let failedSeasons = [];
+
+            for (let i = 0; i < selectedSeasons.length; i++) {
+                const season = selectedSeasons[i];
+                const seasonLabel = seasonEl.querySelector(`option[value="${season}"]`).innerText;
+                const ofSeason = formatOpenFootballSeason(season);
+                const baseUrl = `${OPENFOOTBALL_BASE}${ofSeason}/${ofLeague}.json`;
+
+                if (isMulti) {
+                    statusArea.innerText = `Fetching ${leagueName} ${seasonLabel} from OpenFootball (${i + 1}/${selectedSeasons.length})...`;
+                    progressBar.style.width = `${((i) / selectedSeasons.length) * 100}%`;
+                } else {
+                    statusArea.innerText = `Fetching ${leagueName} ${seasonLabel} from OpenFootball...`;
+                }
+
+                let jsonText = null;
+
+                // --- Strategy 1: direct fetch (raw.githubusercontent.com sends CORS headers) ---
+                try {
+                    const response = await fetch(baseUrl, { headers: { 'Accept': 'application/json,text/plain,*/*' } });
+                    if (response.ok) {
+                        const text = await response.text();
+                        if (text && text.includes('"matches"')) {
+                            jsonText = text;
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`[fetchOpenFootballData] Direct fetch failed for ${ofSeason}:`, e.message);
+                }
+
+                // --- Strategy 2: public CORS proxy fallbacks ---
+                if (!jsonText) {
+                    const proxyUrls = [
+                        ['https://corsproxy.io/?', 'corsproxy.io'],
+                        ['https://api.allorigins.win/raw?url=', 'allorigins.win']
+                    ];
+                    for (const [proxy, name] of proxyUrls) {
+                        const url = proxy + encodeURIComponent(baseUrl);
+                        try {
+                            const response = await fetch(url, { headers: { 'Accept': 'application/json,text/plain,*/*' } });
+                            if (!response.ok) continue;
+                            const text = await response.text();
+                            if (text && text.includes('"matches"')) {
+                                jsonText = text;
+                                break;
+                            }
+                        } catch (e) { /* try next */ }
+                    }
+                }
+
+                if (jsonText) {
+                    const countBefore = globalMatches.length;
+                    parseOpenFootballJSON(jsonText, league, season, statusArea, downloadBtn, tableContainer, tableBody, true);
+                    const added = globalMatches.length - countBefore;
+                    totalLoaded += added;
+                    console.log(`[Techmari] OpenFootball ${leagueName} ${seasonLabel}: +${added} matches (total: ${globalMatches.length})`);
+                } else {
+                    failedSeasons.push(`${seasonLabel} (no OpenFootball file)`);
+                    console.warn(`[Techmari] OpenFootball has no data for ${leagueName} ${seasonLabel}`);
+                }
+
+                // Small delay between seasons to be respectful to raw.githubusercontent.com
+                if (i < selectedSeasons.length - 1) {
+                    await new Promise(r => setTimeout(r, 400));
+                }
+            }
+
+            // Complete progress bar
+            if (isMulti) {
+                progressBar.style.width = '100%';
+                setTimeout(() => { progressContainer.style.display = 'none'; }, 800);
+            }
+
+            // Final sort by date across all seasons
+            globalMatches.sort((a, b) => parseDateForSort(a.date) - parseDateForSort(b.date));
+
+            if (globalMatches.length > 0) {
+                let msg = `Loaded ${totalLoaded.toLocaleString()} matches from OpenFootball (${selectedSeasons.length - failedSeasons.length} season(s), no odds data).`;
+                if (failedSeasons.length > 0) {
+                    msg += ` Failed: ${failedSeasons.join(', ')}.`;
+                }
+                statusArea.innerText = msg;
+                statusArea.style.color = '#28a745';
+                renderTable(statusArea, downloadBtn, tableContainer, tableBody, msg);
+            } else {
+                statusArea.innerHTML = `
+                    <strong>Failed to load data</strong> from OpenFootball for all selected seasons.<br><br>
+                    OpenFootball JSON coverage varies by league and season (major European leagues are complete from ~2015 onwards; seasons before 2010 are not published).<br>
+                    <strong>Option 1:</strong> Switch the Data Source back to <em>football-data.co.uk</em>.<br>
+                    <strong>Option 2:</strong> Use <em>"manual paste / CSV upload"</em> below.`;
+                statusArea.style.color = '#dc3545';
+            }
+
+            fetchBtn.disabled = false;
+            fetchBtn.innerText = 'Load Data';
+        }
 
         function toggleLegacyInput() {
             const dsPanel = document.getElementById('datasourcePanel');
@@ -1680,12 +1976,56 @@
             return { played: matches.length, winRate: ((wins / matches.length) * 100).toFixed(1) + "%", avgScored: (scored / matches.length).toFixed(2), avgConc: (conceded / matches.length).toFixed(2) };
         }
 
+        function calculateCleanSheetStats(team) {
+            // Clean sheet = a completed match in which the team conceded 0 goals.
+            // Uses dated, played matches only (skips fixtures without scores, e.g. upcoming games).
+            const matches = sortMatchesByDate(globalMatches.filter(m => (m.homeTeam === team || m.awayTeam === team) && Number.isFinite(m.homeScore) && Number.isFinite(m.awayScore)));
+            if (matches.length === 0) return null;
+            let cs = 0, homeTotal = 0, homeCS = 0, awayTotal = 0, awayCS = 0;
+            matches.forEach(m => {
+                const isHome = m.homeTeam === team;
+                const conceded = isHome ? m.awayScore : m.homeScore;
+                if (isHome) homeTotal++; else awayTotal++;
+                if (conceded === 0) { cs++; if (isHome) homeCS++; else awayCS++; }
+            });
+            let streak = 0;
+            for (let i = matches.length - 1; i >= 0; i--) {
+                const m = matches[i];
+                if ((m.homeTeam === team ? m.awayScore : m.homeScore) === 0) streak++; else break;
+            }
+            return {
+                total: matches.length, cs, homeTotal, homeCS, awayTotal, awayCS, streak,
+                pct: (cs / matches.length) * 100,
+                homePct: homeTotal > 0 ? (homeCS / homeTotal) * 100 : null,
+                awayPct: awayTotal > 0 ? (awayCS / awayTotal) * 100 : null
+            };
+        }
+
+        function formatCleanSheetValue(pct, made, total) {
+            if (pct === null || total === 0) return "-";
+            return `${pct.toFixed(1)}% (${made}/${total})`;
+        }
+
+        function updateCleanSheetDisplay(home, away) {
+            const h = calculateCleanSheetStats(home); const a = calculateCleanSheetStats(away);
+            const suffix = n => `${n} match${n === 1 ? '' : 'es'}`;
+            document.getElementById('homeCleanSheetPct').innerText = h ? formatCleanSheetValue(h.pct, h.cs, h.total) : "-";
+            document.getElementById('homeCleanSheetHomePct').innerText = h ? formatCleanSheetValue(h.homePct, h.homeCS, h.homeTotal) : "-";
+            document.getElementById('homeCleanSheetAwayPct').innerText = h ? formatCleanSheetValue(h.awayPct, h.awayCS, h.awayTotal) : "-";
+            document.getElementById('homeCleanSheetStreak').innerText = h ? suffix(h.streak) : "-";
+            document.getElementById('awayCleanSheetPct').innerText = a ? formatCleanSheetValue(a.pct, a.cs, a.total) : "-";
+            document.getElementById('awayCleanSheetHomePct').innerText = a ? formatCleanSheetValue(a.homePct, a.homeCS, a.homeTotal) : "-";
+            document.getElementById('awayCleanSheetAwayPct').innerText = a ? formatCleanSheetValue(a.awayPct, a.awayCS, a.awayTotal) : "-";
+            document.getElementById('awayCleanSheetStreak').innerText = a ? suffix(a.streak) : "-";
+        }
+
         function calculateSpecificTeamInsights(home, away) {
             document.getElementById('specificTeamInsights').classList.remove('hidden');
             const h = getSpecificTeamStats(home);
             document.getElementById('homeStatsName').innerText = home; document.getElementById('homeMatches').innerText = h ? h.played : 0; document.getElementById('homeWinRate').innerText = h ? h.winRate : "-"; document.getElementById('homeAvgScored').innerText = h ? h.avgScored : "-"; document.getElementById('homeAvgConc').innerText = h ? h.avgConc : "-";
             const a = getSpecificTeamStats(away);
             document.getElementById('awayStatsName').innerText = away; document.getElementById('awayMatches').innerText = a ? a.played : 0; document.getElementById('awayWinRate').innerText = a ? a.winRate : "-"; document.getElementById('awayAvgScored').innerText = a ? a.avgScored : "-"; document.getElementById('awayAvgConc').innerText = a ? a.avgConc : "-";
+            updateCleanSheetDisplay(home, away);
         }
 
         function calculateMatchupInsights(home, away) {
@@ -1697,6 +2037,15 @@
             let homeWins = 0, awayWins = 0, draws = 0, totalGoals = 0;
             h2h.forEach(m => { totalGoals += m.homeScore + m.awayScore; if (m.homeTeam === home) { if (m.homeScore > m.awayScore) homeWins++; else if (m.awayScore > m.homeScore) awayWins++; else draws++; } else { if (m.awayScore > m.homeScore) homeWins++; else if (m.homeScore > m.awayScore) awayWins++; else draws++; } });
             summary.innerHTML = `<b>History:</b> ${homeWins} Wins, ${draws} Draws, ${awayWins} Losses<br><b>Average Goals:</b> ${(totalGoals / h2h.length).toFixed(2)} per match<br><b>Total Meetings:</b> ${h2h.length}`;
+        }
+
+        function onTeamSelectChange() {
+            // Live refresh of Selected Team Statistics (incl. clean sheet %) as soon as teams are picked — no Predict click needed.
+            if (!teamStats || Object.keys(teamStats).length === 0) return;
+            const home = document.getElementById('homeTeamSelect').value;
+            const away = document.getElementById('awayTeamSelect').value;
+            if (!home || !away) return;
+            calculateSpecificTeamInsights(home, away);
         }
 
         function populateDropdowns() {
