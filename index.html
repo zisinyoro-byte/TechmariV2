@@ -770,6 +770,13 @@
             <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Teams that score a lot but also concede - ideal for Over goals and BTTS markets. Ratings are now <strong>SOS-adjusted</strong> to account for opposition strength.</p>
             <div class="awd-explanation"><p><strong>How it works (v2 - SOS Adjusted):</strong> Ratings are iteratively adjusted for opponent strength. If a team scored heavily against <span style="color:#dc3545">weak defenses</span>, their attack is <span style="color:#dc3545">deflated (padded)</span>. If they scored against <span style="color:#28a745">strong defenses</span>, their attack is <span style="color:#28a745">boosted (proven)</span>. <strong>Raw values</strong> shown crossed out. Needs 4+ teams and 10+ matches for SOS to activate.</p></div>
             <div id="attackWeakDefenseContent"></div>
+            <div id="awdFixturesPanel" class="hidden" style="margin-top: 18px;">
+                <div class="matchup-title">Upcoming: Entertaining Teams in Action</div>
+                <div id="awdFixturesContent"></div>
+            </div>
+            <div style="margin-top: 14px; text-align: center;">
+                <button onclick="exportEntertainingReportCSV()" class="btn-export">Download Entertaining Teams Report (CSV)</button>
+            </div>
         </div>
         <div id="insightsSection" class="hidden">
             <h3>Step 3: Summary Insights</h3>
@@ -927,6 +934,7 @@
     </div>
     <script>
         let globalMatches = [];
+        let globalFixtures = [];   // upcoming fixtures (no final score yet) — captured from OpenFootball loads; powers the Entertaining Teams report
         let teamStats = {};
         let currentDeviationPeriod = 'season';
         let lastSelectedHomeTeam = null;
@@ -1036,6 +1044,7 @@
 
             if (!append) {
                 globalMatches = [];
+                globalFixtures = [];
                 matchOddsData = {};
                 document.getElementById('oddsSourceBadge').style.display = 'none';
             }
@@ -1044,14 +1053,27 @@
             let skippedFixtures = 0;
 
             matches.forEach(m => {
-                // Skip upcoming fixtures (no full-time score yet)
-                const ft = m.score && Array.isArray(m.score.ft) ? m.score.ft : null;
-                if (!ft || ft.length < 2 || typeof ft[0] !== 'number' || typeof ft[1] !== 'number') { skippedFixtures++; return; }
-
                 // team1/team2 are plain strings in football.json; tolerate {name|key} objects too
                 const homeTeam = typeof m.team1 === 'string' ? m.team1 : (m.team1 && (m.team1.name || m.team1.key));
                 const awayTeam = typeof m.team2 === 'string' ? m.team2 : (m.team2 && (m.team2.name || m.team2.key));
                 if (!homeTeam || !awayTeam) return;
+
+                const ft = m.score && Array.isArray(m.score.ft) ? m.score.ft : null;
+                if (!ft || ft.length < 2 || typeof ft[0] !== 'number' || typeof ft[1] !== 'number') {
+                    // Upcoming fixture (no final score yet) — keep it for the Entertaining Teams report
+                    if (m.date) {
+                        globalFixtures.push({
+                            league: leagueName + (append ? ' ' + formatSeasonLabel(season) : ''),
+                            round: m.round || '',
+                            date: formatISODateToUK(m.date),
+                            homeTeam: homeTeam,
+                            awayTeam: awayTeam,
+                            notes: 'OpenFootball fixture'
+                        });
+                    }
+                    skippedFixtures++;
+                    return;
+                }
 
                 const homeScore = parseInt(ft[0], 10);
                 const awayScore = parseInt(ft[1], 10);
@@ -1079,10 +1101,11 @@
             });
 
             if (skippedFixtures > 0) {
-                console.log(`[Techmari] OpenFootball ${leagueCode} ${season}: skipped ${skippedFixtures} rows without a final score (upcoming fixtures)`);
+                console.log(`[Techmari] OpenFootball ${leagueCode} ${season}: ${skippedFixtures} upcoming fixtures kept in globalFixtures (no final score yet)`);
             }
 
             globalMatches.sort((a, b) => parseDateForSort(a.date) - parseDateForSort(b.date));
+            globalFixtures.sort((a, b) => parseDateForSort(a.date) - parseDateForSort(b.date));
 
             if (!append) {
                 if (globalMatches.length === 0) {
@@ -1130,6 +1153,7 @@
 
             // Reset data fresh
             globalMatches = [];
+            globalFixtures = [];
             matchOddsData = {};
             tableBody.innerHTML = '';
             document.getElementById('oddsSourceBadge').style.display = 'none';
@@ -1360,6 +1384,7 @@
             if (!append) {
                 document.getElementById('oddsSourceBadge').style.display = hasAnyOdds ? 'inline-block' : 'none';
                 globalMatches = [];
+                globalFixtures = [];
                 matchOddsData = {};
             } else if (hasAnyOdds) {
                 document.getElementById('oddsSourceBadge').style.display = 'inline-block';
@@ -1533,6 +1558,7 @@
 
             // Reset data fresh
             globalMatches = [];
+            globalFixtures = [];
             matchOddsData = {};
             tableBody.innerHTML = '';
 
@@ -1688,6 +1714,7 @@
             statusArea.innerText = "Processing...";
             tableBody.innerHTML = "";
             globalMatches = [];
+            globalFixtures = [];
             const lines = rawInput.split('\n').map(l => l.trim()).filter(l => l.length > 0);
             let currentLeague = "Unknown";
             let currentRound = "Unknown";
@@ -1807,6 +1834,7 @@
                     // Legacy simple CSV format: Date,Home,Away,HomeScore,AwayScore
                     const rows = text.split('\n').filter(row => row.trim() !== "");
                     globalMatches = [];
+                    globalFixtures = [];
                     for (let i = 1; i < rows.length; i++) {
                         const cols = rows[i].split(',');
                         if (cols.length >= 5) {
@@ -2189,10 +2217,15 @@
             else { const maxP = bttsTeams[0].probability; bttsContainer.innerHTML = bttsTeams.map((t, idx) => { const isTop3 = idx < 3; return `<div class="team-prob-row ${isTop3 ? 'top-3 btts' : ''}"><div style="flex: 1;"><div class="team-prob-name">${idx + 1}. ${t.team}${isTop3 ? '<span class="highlight-badge">TOP</span>' : ''}</div><div class="prob-bar-container"><div class="prob-bar btts" style="width: ${(t.probability / maxP) * 100}%"></div></div></div><div class="team-prob-value ${t.probability >= 60 ? 'btts-very-high' : 'btts-high'}">${t.probability.toFixed(1)}%</div></div>`; }).join(''); }
         }
 
+        let lastAWDTeams = [];
+
         function calculateAttackWeakDefenseTeams() {
             const awdTeams = [];
             for (let team in teamStats) { const s = teamStats[team]; if (s.attack > 1.0 && s.defense > 1.0 && s.totalGames >= 3) awdTeams.push({ team, attack: s.attack, defense: s.defense, rawAttack: s.rawAttack, rawDefense: s.rawDefense, sosAttackDelta: s.sosAttackDelta, sosDefenseDelta: s.sosDefenseDelta, avgScored: s.avgScored, avgConceded: s.avgConceded, totalGames: s.totalGames, combinedScore: s.attack + s.defense }); }
-            awdTeams.sort((a, b) => b.combinedScore - a.combinedScore); renderAttackWeakDefenseTeams(awdTeams.slice(0, 10));
+            awdTeams.sort((a, b) => b.combinedScore - a.combinedScore);
+            lastAWDTeams = awdTeams.slice(0, 10);
+            renderAttackWeakDefenseTeams(lastAWDTeams);
+            renderEntertainerFixtures(lastAWDTeams);
         }
 
         function renderAttackWeakDefenseTeams(teams) {
@@ -2215,6 +2248,88 @@
                 const defSOSClass = defDelta > 0.05 ? 'sos-inflated' : defDelta < -0.05 ? 'sos-deflated' : 'sos-neutral';
                 return `<div class="awd-team-card ${isTop ? 'top-tier' : ''}"><div class="awd-team-header"><span class="awd-team-name">${idx + 1}. ${t.team}${isTop ? '<span class="highlight-badge">HOT</span>' : ''}</span><span class="awd-score-badge ${isTop ? 'hot' : ''}">Score: ${t.combinedScore.toFixed(2)}</span></div><div class="awd-stats-row"><div class="awd-stat-item"><div class="awd-stat-label">Attack (SOS)</div><div class="awd-stat-value good">${t.attack.toFixed(2)}</div><div class="awd-sos-label ${attSOSClass}">${attSOSLabel}</div><div class="awd-raw-label">Raw: ${t.rawAttack.toFixed(2)}</div></div><div class="awd-stat-item"><div class="awd-stat-label">Defense (SOS)</div><div class="awd-stat-value bad">${t.defense.toFixed(2)}</div><div class="awd-sos-label ${defSOSClass}">${defSOSLabel}</div><div class="awd-raw-label">Raw: ${t.rawDefense.toFixed(2)}</div></div><div class="awd-stat-item"><div class="awd-stat-label">Avg Scored</div><div class="awd-stat-value purple">${t.avgScored.toFixed(2)}</div></div><div class="awd-stat-item"><div class="awd-stat-label">Avg Conceded</div><div class="awd-stat-value bad">${t.avgConceded.toFixed(2)}</div></div></div><div class="awd-meter"><span class="awd-meter-label">Attack Power</span><div class="awd-meter-bar"><div class="awd-meter-fill attack" style="width: ${(t.attack / maxA) * 100}%"></div></div></div><div class="awd-meter"><span class="awd-meter-label">Defensive Leak</span><div class="awd-meter-bar"><div class="awd-meter-fill defense" style="width: ${(t.defense / maxD) * 100}%"></div></div></div></div>`; 
             }).join('');
+        }
+
+        // ---- Entertaining Teams report + upcoming entertainer fixtures ----
+        function todayUK() {
+            const d = new Date();
+            return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+        }
+
+        function getUpcomingEntertainerFixtures(teams, fixtures, fromDateUK) {
+            if (!teams || teams.length === 0 || !fixtures || fixtures.length === 0) return [];
+            const entSet = new Set(teams.map(t => t.team));
+            const from = parseDateForSort(fromDateUK);
+            return sortMatchesByDate(fixtures.filter(f => (entSet.has(f.homeTeam) || entSet.has(f.awayTeam)) && parseDateForSort(f.date) >= from))
+                .map(f => ({ date: f.date, round: f.round || '', homeTeam: f.homeTeam, awayTeam: f.awayTeam, bothEntertaining: entSet.has(f.homeTeam) && entSet.has(f.awayTeam) }));
+        }
+
+        function csvEscape(val) {
+            return `"${String(val === null || val === undefined ? '' : val).replace(/"/g, '""')}"`;
+        }
+
+        function buildEntertainingReportCSV(teams, upcoming, generatedWhen, todayStr) {
+            const entSet = new Set(teams.map(t => t.team));
+            const lines = [];
+            lines.push('Techmari Pro FP2 - Entertaining Teams Report');
+            lines.push(csvEscape('Generated: ' + generatedWhen + ' | Upcoming fixtures from: ' + todayStr));
+            lines.push(csvEscape('Entertainer = strong attack (SOS-adjusted) + leaky defense. Entertainment Score = Attack rating + Defense Leak rating.'));
+            lines.push('');
+            lines.push('SECTION 1: ENTERTAINING TEAMS');
+            lines.push('Rank,Team,Entertainment Score,Attack (SOS),Defense Leak (SOS),Raw Attack,Raw Defense,Avg Scored,Avg Conceded,Matches,Clean Sheet %,Next Fixture');
+            teams.forEach((t, idx) => {
+                const cs = calculateCleanSheetStats(t.team);
+                const next = upcoming.find(f => f.homeTeam === t.team || f.awayTeam === t.team);
+                let nextTxt = 'None found';
+                if (next) nextTxt = `${next.date} ${next.homeTeam === t.team ? '(H) vs ' + next.awayTeam : '(A) at ' + next.homeTeam}` + (next.bothEntertaining ? ' [BOTH ENTERTAINING]' : '');
+                lines.push([idx + 1, t.team, t.combinedScore.toFixed(2), t.attack.toFixed(2), t.defense.toFixed(2), t.rawAttack.toFixed(2), t.rawDefense.toFixed(2), t.avgScored.toFixed(2), t.avgConceded.toFixed(2), t.totalGames, cs ? cs.pct.toFixed(1) + '% (' + cs.cs + '/' + cs.total + ')' : 'N/A', nextTxt].map(csvEscape).join(','));
+            });
+            lines.push('');
+            lines.push('SECTION 2: UPCOMING FIXTURES INVOLVING ENTERTAINING TEAMS');
+            lines.push('Date,Round,Home Team,Away Team,Entertainment Note');
+            if (upcoming.length === 0) {
+                lines.push(csvEscape('None found. NOTE: upcoming fixtures are only captured when data is loaded from OpenFootball (football-data.co.uk files contain played results only).'));
+            } else {
+                upcoming.forEach(f => {
+                    const note = f.bothEntertaining ? 'BOTH ENTERTAINING - Over 2.5 / BTTS candidate' : 'Entertainer: ' + (entSet.has(f.homeTeam) ? f.homeTeam : f.awayTeam);
+                    lines.push([f.date, f.round, f.homeTeam, f.awayTeam, note].map(csvEscape).join(','));
+                });
+            }
+            return lines.join('\n') + '\n';
+        }
+
+        function exportEntertainingReportCSV() {
+            if (!lastAWDTeams || lastAWDTeams.length === 0) { alert("Process match data first - the Entertaining Teams list is built during processing."); return; }
+            const upcoming = getUpcomingEntertainerFixtures(lastAWDTeams, globalFixtures, todayUK());
+            const csv = buildEntertainingReportCSV(lastAWDTeams, upcoming, new Date().toLocaleString('en-GB'), todayUK());
+            const csvContent = "data:text/csv;charset=utf-8," + csv;
+            const link = document.createElement("a");
+            link.setAttribute("href", encodeURI(csvContent));
+            link.setAttribute("download", `techmari_entertaining_teams_${new Date().toISOString().slice(0, 10)}.csv`);
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+
+        function renderEntertainerFixtures(teams) {
+            const panel = document.getElementById('awdFixturesPanel');
+            const content = document.getElementById('awdFixturesContent');
+            if (!teams || teams.length === 0) { panel.classList.add('hidden'); return; }
+            panel.classList.remove('hidden');
+            if (!globalFixtures || globalFixtures.length === 0) {
+                content.innerHTML = '<div class="no-data-message">No upcoming fixtures in the loaded data. Fixtures are captured automatically when you load data from OpenFootball (football-data.co.uk files contain played results only).</div>';
+                return;
+            }
+            const upcoming = getUpcomingEntertainerFixtures(teams, globalFixtures, todayUK());
+            if (upcoming.length === 0) {
+                content.innerHTML = '<div class="no-data-message">No upcoming fixtures involving entertaining teams in the loaded data.</div>';
+                return;
+            }
+            const entSet = new Set(teams.map(t => t.team));
+            content.innerHTML = upcoming.slice(0, 30).map(f => {
+                const both = f.bothEntertaining;
+                const ent = entSet.has(f.homeTeam) ? f.homeTeam : f.awayTeam;
+                const badge = both ? '<span class="highlight-badge" style="background:#e83e8c;">BOTH ENTERTAINING</span>' : `<span class="awd-sos-label sos-neutral">Entertainer: ${ent}</span>`;
+                return `<div class="awd-team-card" style="padding:10px 15px; margin-bottom:8px;${both ? ' border-left-color:#e83e8c;' : ''}"><div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;"><div><span class="awd-team-name" style="font-size:14px;">${f.homeTeam} vs ${f.awayTeam}</span> ${badge}</div><div style="font-size:12px; color:#6c757d;">${f.date}${f.round ? ' &middot; ' + f.round : ''}</div></div></div>`;
+            }).join('') + (upcoming.length > 30 ? `<div class="no-data-message">+ ${upcoming.length - 30} more (see CSV report)</div>` : '');
         }
 
         function setDeviationPeriod(period) {
