@@ -2256,12 +2256,26 @@
             return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
         }
 
+        // Unique league name(s) a team appears under, in encounter order (globalMatches is date-sorted).
+        // League comes from the data source: football-data.co.uk / OpenFootball use league name + season;
+        // pasted data captures the league title from the first lines of the pasted text.
+        function getTeamLeagues(team) {
+            const seen = new Set();
+            const leagues = [];
+            (globalMatches || []).forEach(m => {
+                if (m.homeTeam !== team && m.awayTeam !== team) return;
+                const lg = (m.league || '').trim() || 'Unknown';
+                if (!seen.has(lg)) { seen.add(lg); leagues.push(lg); }
+            });
+            return leagues;
+        }
+
         function getUpcomingEntertainerFixtures(teams, fixtures, fromDateUK) {
             if (!teams || teams.length === 0 || !fixtures || fixtures.length === 0) return [];
             const entSet = new Set(teams.map(t => t.team));
             const from = parseDateForSort(fromDateUK);
             return sortMatchesByDate(fixtures.filter(f => (entSet.has(f.homeTeam) || entSet.has(f.awayTeam)) && parseDateForSort(f.date) >= from))
-                .map(f => ({ date: f.date, round: f.round || '', homeTeam: f.homeTeam, awayTeam: f.awayTeam, bothEntertaining: entSet.has(f.homeTeam) && entSet.has(f.awayTeam) }));
+                .map(f => ({ date: f.date, round: f.round || '', league: f.league || '', homeTeam: f.homeTeam, awayTeam: f.awayTeam, bothEntertaining: entSet.has(f.homeTeam) && entSet.has(f.awayTeam) }));
         }
 
         function csvEscape(val) {
@@ -2276,23 +2290,24 @@
             lines.push(csvEscape('Entertainer = strong attack (SOS-adjusted) + leaky defense. Entertainment Score = Attack rating + Defense Leak rating.'));
             lines.push('');
             lines.push('SECTION 1: ENTERTAINING TEAMS');
-            lines.push('Rank,Team,Entertainment Score,Attack (SOS),Defense Leak (SOS),Raw Attack,Raw Defense,Avg Scored,Avg Conceded,Matches,Clean Sheet %,Next Fixture');
+            lines.push('Rank,Team,League(s),Entertainment Score,Attack (SOS),Defense Leak (SOS),Raw Attack,Raw Defense,Avg Scored,Avg Conceded,Matches,Clean Sheet %,Next Fixture');
             teams.forEach((t, idx) => {
                 const cs = calculateCleanSheetStats(t.team);
+                const leaguesTxt = getTeamLeagues(t.team).join('; ') || 'Unknown';
                 const next = upcoming.find(f => f.homeTeam === t.team || f.awayTeam === t.team);
                 let nextTxt = 'None found';
                 if (next) nextTxt = `${next.date} ${next.homeTeam === t.team ? '(H) vs ' + next.awayTeam : '(A) at ' + next.homeTeam}` + (next.bothEntertaining ? ' [BOTH ENTERTAINING]' : '');
-                lines.push([idx + 1, t.team, t.combinedScore.toFixed(2), t.attack.toFixed(2), t.defense.toFixed(2), t.rawAttack.toFixed(2), t.rawDefense.toFixed(2), t.avgScored.toFixed(2), t.avgConceded.toFixed(2), t.totalGames, cs ? cs.pct.toFixed(1) + '% (' + cs.cs + '/' + cs.total + ')' : 'N/A', nextTxt].map(csvEscape).join(','));
+                lines.push([idx + 1, t.team, leaguesTxt, t.combinedScore.toFixed(2), t.attack.toFixed(2), t.defense.toFixed(2), t.rawAttack.toFixed(2), t.rawDefense.toFixed(2), t.avgScored.toFixed(2), t.avgConceded.toFixed(2), t.totalGames, cs ? cs.pct.toFixed(1) + '% (' + cs.cs + '/' + cs.total + ')' : 'N/A', nextTxt].map(csvEscape).join(','));
             });
             lines.push('');
             lines.push('SECTION 2: UPCOMING FIXTURES INVOLVING ENTERTAINING TEAMS');
-            lines.push('Date,Round,Home Team,Away Team,Entertainment Note');
+            lines.push('Date,Round,League,Home Team,Away Team,Entertainment Note');
             if (upcoming.length === 0) {
                 lines.push(csvEscape('None found. NOTE: upcoming fixtures are only captured when data is loaded from OpenFootball (football-data.co.uk files contain played results only).'));
             } else {
                 upcoming.forEach(f => {
                     const note = f.bothEntertaining ? 'BOTH ENTERTAINING - Over 2.5 / BTTS candidate' : 'Entertainer: ' + (entSet.has(f.homeTeam) ? f.homeTeam : f.awayTeam);
-                    lines.push([f.date, f.round, f.homeTeam, f.awayTeam, note].map(csvEscape).join(','));
+                    lines.push([f.date, f.round, f.league || '', f.homeTeam, f.awayTeam, note].map(csvEscape).join(','));
                 });
             }
             return lines.join('\n') + '\n';
@@ -2328,7 +2343,7 @@
                 const both = f.bothEntertaining;
                 const ent = entSet.has(f.homeTeam) ? f.homeTeam : f.awayTeam;
                 const badge = both ? '<span class="highlight-badge" style="background:#e83e8c;">BOTH ENTERTAINING</span>' : `<span class="awd-sos-label sos-neutral">Entertainer: ${ent}</span>`;
-                return `<div class="awd-team-card" style="padding:10px 15px; margin-bottom:8px;${both ? ' border-left-color:#e83e8c;' : ''}"><div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;"><div><span class="awd-team-name" style="font-size:14px;">${f.homeTeam} vs ${f.awayTeam}</span> ${badge}</div><div style="font-size:12px; color:#6c757d;">${f.date}${f.round ? ' &middot; ' + f.round : ''}</div></div></div>`;
+                return `<div class="awd-team-card" style="padding:10px 15px; margin-bottom:8px;${both ? ' border-left-color:#e83e8c;' : ''}"><div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;"><div><span class="awd-team-name" style="font-size:14px;">${f.homeTeam} vs ${f.awayTeam}</span> ${badge}</div><div style="font-size:12px; color:#6c757d;">${f.date}${f.round ? ' &middot; ' + f.round : ''}${f.league ? ' &middot; ' + f.league : ''}</div></div></div>`;
             }).join('') + (upcoming.length > 30 ? `<div class="no-data-message">+ ${upcoming.length - 30} more (see CSV report)</div>` : '');
         }
 

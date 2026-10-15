@@ -55,10 +55,12 @@ ${extract('parseDateForSort')}
 ${extract('sortMatchesByDate')}
 ${extract('parseOpenFootballJSON')}
 ${extract('todayUK')}
+${extract('getTeamLeagues')}
 ${extract('getUpcomingEntertainerFixtures')}
 ${extract('csvEscape')}
 ${extract('buildEntertainingReportCSV')}
 ${extract('calculateCleanSheetStats')}
+${extract('renderEntertainerFixtures')}
 function renderTable(){ }
 `;
 vm.createContext(sandbox);
@@ -89,7 +91,7 @@ const teams = [{ team: 'Team A' }, { team: 'Team B' }];
 const synthFixtures = [
   { date: '20/09/2026', homeTeam: 'Team A', awayTeam: 'Team X', round: 'R1' },  // past -> excluded
   { date: '18/10/2026', homeTeam: 'Team X', awayTeam: 'Team A', round: 'R2' },  // future, one entertainer (away)
-  { date: '19/10/2026', homeTeam: 'Team A', awayTeam: 'Team B', round: 'R2' },  // future, BOTH
+  { date: '19/10/2026', homeTeam: 'Team A', awayTeam: 'Team B', round: 'R2', league: 'England Premier League 25/26' },  // future, BOTH (has league)
   { date: '25/10/2026', homeTeam: 'Team X', awayTeam: 'Team B', round: 'R3' },  // future, one entertainer
   { date: '15/10/2026', homeTeam: 'Team Y', awayTeam: 'Team Z', round: 'R2' }   // no entertainer -> excluded
 ];
@@ -108,8 +110,8 @@ const csv = vm.runInContext(`buildEntertainingReportCSV([
   { team: 'Team "C"', attack: 1.30, defense: 1.10, rawAttack: 1.25, rawDefense: 1.05, avgScored: 1.7, avgConceded: 1.4, totalGames: 6, combinedScore: 2.40 }
 ], ${JSON.stringify(up)}, '13/10/2026, 09:00', '13/10/2026')`, sandbox);
 check('has title + both sections', csv.includes('Entertaining Teams Report') && csv.includes('SECTION 1: ENTERTAINING TEAMS') && csv.includes('SECTION 2: UPCOMING FIXTURES'));
-check('header has score column', csv.includes('Rank,Team,Entertainment Score'));
-check('team row with score', csv.includes('"Team A","2.83"') && csv.includes('"1.52"'), csv.split('\n').slice(5, 8).join(' / '));
+check('header has League(s) + score column', csv.includes('Rank,Team,League(s),Entertainment Score'));
+check('team row: league Unknown when no match data', csv.includes('"Team A","Unknown","2.83"') && csv.includes('"1.52"'), csv.split('\n').slice(5, 8).join(' / '));
 check('quote escaping (Team ""C"")', csv.includes('"Team ""C"""'));
 check('clean sheet N/A when no match data', csv.includes('"N/A"'));
 check('next fixture (A) for Team A', csv.includes('18/10/2026 (A) at Team X'));
@@ -117,11 +119,53 @@ check('next fixture (A) + both tag for Team B', csv.includes('19/10/2026 (A) at 
 check('no-fixture team shows None found', csv.split('"Team ""C"""')[1].includes('None found'));
 check('section 2 both-entertaining note', csv.includes('BOTH ENTERTAINING - Over 2.5 / BTTS candidate'));
 check('section 2 single-entertainer notes', csv.includes('Entertainer: Team A') && csv.includes('Entertainer: Team B'));
+check('section 2 header has League column', csv.includes('Date,Round,League,Home Team,Away Team,Entertainment Note'));
+check('section 2 row carries fixture league', csv.includes('"19/10/2026","R2","England Premier League 25/26","Team A","Team B"'));
+check('section 2 row without league -> empty cell', csv.includes('"18/10/2026","R2","","Team X","Team A","Entertainer: Team A"'));
 check('CSV ends with newline', csv.endsWith('\n'));
 
 // --- Test 4: empty upcoming -> explanatory note ---
 const csv2 = vm.runInContext(`buildEntertainingReportCSV([{ team: 'Team A', attack: 1.5, defense: 1.2, rawAttack: 1.4, rawDefense: 1.1, avgScored: 2, avgConceded: 1.5, totalGames: 6, combinedScore: 2.7 }], [], '13/10/2026', '13/10/2026')`, sandbox);
 check('empty fixtures -> note line present', csv2.includes('None found. NOTE: upcoming fixtures are only captured'));
+
+// --- Test 5: league name(s) captured from match data (paste: first lines; OF/fd: league+season) ---
+vm.runInContext(`globalMatches = [
+  { league: 'England Premier League 25/26', date: '15/08/2025', homeTeam: 'Team A', awayTeam: 'Team B', homeScore: 2, awayScore: 1 },
+  { league: 'England Premier League 25/26', date: '22/08/2025', homeTeam: 'Team B', awayTeam: 'Team A', homeScore: 3, awayScore: 2 },
+  { league: 'England Premier League 24/25', date: '10/05/2025', homeTeam: 'Team A', awayTeam: 'Team X', homeScore: 4, awayScore: 3 }
+]`, sandbox);
+check('getTeamLeagues: unique + encounter order', vm.runInContext(`getTeamLeagues('Team A').join('|')`, sandbox) === 'England Premier League 25/26|England Premier League 24/25', vm.runInContext(`getTeamLeagues('Team A').join('|')`, sandbox));
+check('getTeamLeagues: unknown team -> []', vm.runInContext(`getTeamLeagues('Nobody FC').length`, sandbox) === 0);
+const csv3 = vm.runInContext(`buildEntertainingReportCSV([
+  { team: 'Team A', attack: 1.52, defense: 1.31, rawAttack: 1.40, rawDefense: 1.25, avgScored: 2.1, avgConceded: 1.7, totalGames: 8, combinedScore: 2.83 }
+], ${JSON.stringify(up)}, '13/10/2026, 09:00', '13/10/2026')`, sandbox);
+check('team row includes joined league(s)', csv3.includes('"Team A","England Premier League 25/26; England Premier League 24/25","2.83"'), csv3.split('\n').slice(6, 8).join(' / '));
+
+// --- Test 6: fixtures panel renders league (date-independent fixtures) ---
+const dPlus = n => { const d = new Date(Date.now() + n * 86400000); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; };
+vm.runInContext(`globalFixtures = [
+  { date: '${dPlus(3)}', round: 'R1', league: 'England Premier League 25/26', homeTeam: 'Team A', awayTeam: 'Team B' },
+  { date: '${dPlus(6)}', round: 'R2', homeTeam: 'Team A', awayTeam: 'Team X' }
+]`, sandbox);
+let captured = { panelShown: false, html: '' };
+const origDoc = sandbox.document;
+sandbox.document = {
+  getElementById: (id) => ({
+    classList: { add() {}, remove() { if (id === 'awdFixturesPanel') captured.panelShown = true; } },
+    set innerHTML(v) { if (id === 'awdFixturesContent') captured.html = v; },
+    get innerHTML() { return captured.html; }
+  }),
+  querySelector: () => ({ innerHTML: '', style: {} }),
+  createElement: () => ({ setAttribute() {}, click() {}, style: {} }),
+  body: { appendChild() {}, removeChild() {} }
+};
+vm.runInContext(`renderEntertainerFixtures([{ team: 'Team A' }, { team: 'Team B' }])`, sandbox);
+check('panel shown for entertainer fixtures', captured.panelShown === true);
+check('panel card shows matchup', captured.html.includes('Team A vs Team B'));
+check('panel card shows league', captured.html.includes('England Premier League 25/26'), captured.html.slice(0, 200));
+check('panel shows BOTH ENTERTAINING badge', captured.html.includes('BOTH ENTERTAINING'));
+sandbox.document = origDoc;
+vm.runInContext('globalFixtures = ' + JSON.stringify(synthFixtures), sandbox);
 
 console.log(failed === 0 ? '\nALL TESTS PASS' : `\n${failed} TEST(S) FAILED`);
 process.exit(failed === 0 ? 0 : 1);
