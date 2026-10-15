@@ -46,9 +46,12 @@ function extract(name) {
 
 const leagStart = js.indexOf('const LEAGUE_NAMES');
 const leagEnd = js.indexOf('};', leagStart) + 2;
+const aliasStart = js.indexOf('const LEAGUE_TITLE_ALIASES');
+const aliasEnd = js.indexOf('};', aliasStart) + 2;
 
 const code = `
 ${js.slice(leagStart, leagEnd)}
+${js.slice(aliasStart, aliasEnd)}
 ${extract('formatSeasonLabel')}
 ${extract('formatISODateToUK')}
 ${extract('parseDateForSort')}
@@ -62,6 +65,7 @@ ${extract('buildEntertainingReportCSV')}
 ${extract('calculateCleanSheetStats')}
 ${extract('renderEntertainerFixtures')}
 ${extract('buildLeagueFileSlug')}
+${extract('canonLeagueTitle')}
 ${extract('downloadCSV')}
 ${extract('exportEntertainingReportCSV')}
 function renderTable(){ }
@@ -200,6 +204,17 @@ downloadName = null;
 vm.runInContext('exportEntertainingReportCSV()', sandbox);
 check('entertaining report filename includes league + date', downloadName === `techmari_entertaining_teams_Serie_A_25_26_${todayISO}.csv`, downloadName);
 sandbox.document = origDoc;
+
+// --- Test 8: canonical 'Country - League' titles (country next to league) ---
+check('canon: paste "Bundesliga" -> Germany - Bundesliga', vm.runInContext(`canonLeagueTitle('Bundesliga')`, sandbox) === 'Germany - Bundesliga', vm.runInContext(`canonLeagueTitle('Bundesliga')`, sandbox));
+check('canon: paste "Serie A" -> Italy - Serie A', vm.runInContext(`canonLeagueTitle('Serie A')`, sandbox) === 'Italy - Serie A', vm.runInContext(`canonLeagueTitle('Serie A')`, sandbox));
+check('canon: paste "Sky Bet Championship" -> England - Championship', vm.runInContext(`canonLeagueTitle('Sky Bet Championship')`, sandbox) === 'England - Championship');
+check('canon: old-style "English Premier League" -> canonical', vm.runInContext(`canonLeagueTitle('English Premier League')`, sandbox) === 'England - Premier League');
+check('canon: "Scottish Premier League" -> Scotland - Premier League', vm.runInContext(`canonLeagueTitle('Scottish Premier League')`, sandbox) === 'Scotland - Premier League');
+check('canon: unknown title kept as-is', vm.runInContext(`canonLeagueTitle('Sunday League Div 2')`, sandbox) === 'Sunday League Div 2');
+check('canon: null-safe', vm.runInContext(`canonLeagueTitle('')`, sandbox) === '');
+vm.runInContext(`globalMatches = [{ league: 'Germany - Bundesliga 25/26', homeTeam: 'A', awayTeam: 'B' }]; globalFixtures = [];`, sandbox);
+check('slug: country-league format -> Germany_Bundesliga_25_26', vm.runInContext(`buildLeagueFileSlug()`, sandbox) === 'Germany_Bundesliga_25_26', vm.runInContext(`buildLeagueFileSlug()`, sandbox));
 
 console.log(failed === 0 ? '\nALL TESTS PASS' : `\n${failed} TEST(S) FAILED`);
 process.exit(failed === 0 ? 0 : 1);

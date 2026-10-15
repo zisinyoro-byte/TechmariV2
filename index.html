@@ -576,29 +576,29 @@
                 <div class="control-group">
                     <label>League</label>
                     <select id="leagueSelect">
-                        <option value="E0">English Premier League</option>
-                        <option value="E1">English Championship</option>
-                        <option value="E2">English League 1</option>
-                        <option value="E3">English League 2</option>
-                        <option value="EC">English National League</option>
-                        <option value="SC0">Scottish Premier League</option>
-                        <option value="SC1">Scottish Championship</option>
-                        <option value="SC2">Scottish League 1</option>
-                        <option value="SC3">Scottish League 2</option>
-                        <option value="D1">German Bundesliga</option>
-                        <option value="D2">German 2. Bundesliga</option>
-                        <option value="I1">Italian Serie A</option>
-                        <option value="I2">Italian Serie B</option>
-                        <option value="SP1">Spanish La Liga</option>
-                        <option value="SP2">Spanish Segunda</option>
-                        <option value="F1">French Ligue 1</option>
-                        <option value="F2">French Ligue 2</option>
-                        <option value="N1">Dutch Eredivisie</option>
-                        <option value="B1">Belgian First Div</option>
-                        <option value="P1">Portuguese Liga</option>
-                        <option value="T1">Turkish Super Lig</option>
-                        <option value="G1">Greek Super League</option>
-                        <option value="PO">Polish Ekstraklasa</option>
+                        <option value="E0">England - Premier League</option>
+                        <option value="E1">England - Championship</option>
+                        <option value="E2">England - League 1</option>
+                        <option value="E3">England - League 2</option>
+                        <option value="EC">England - National League</option>
+                        <option value="SC0">Scotland - Premier League</option>
+                        <option value="SC1">Scotland - Championship</option>
+                        <option value="SC2">Scotland - League 1</option>
+                        <option value="SC3">Scotland - League 2</option>
+                        <option value="D1">Germany - Bundesliga</option>
+                        <option value="D2">Germany - 2. Bundesliga</option>
+                        <option value="I1">Italy - Serie A</option>
+                        <option value="I2">Italy - Serie B</option>
+                        <option value="SP1">Spain - La Liga</option>
+                        <option value="SP2">Spain - Segunda</option>
+                        <option value="F1">France - Ligue 1</option>
+                        <option value="F2">France - Ligue 2</option>
+                        <option value="N1">Netherlands - Eredivisie</option>
+                        <option value="B1">Belgium - First Div</option>
+                        <option value="P1">Portugal - Liga</option>
+                        <option value="T1">Turkey - Super Lig</option>
+                        <option value="G1">Greece - Super League</option>
+                        <option value="PO">Poland - Ekstraklasa</option>
                     </select>
                 </div>
                 <div class="control-group" style="flex:1.5;">
@@ -953,19 +953,57 @@
         // Store per-match odds from football-data.co.uk for auto-fill
         let matchOddsData = {};  // key: "HomeTeam vs AwayTeam" -> odds object
 
+        // Canonical league names in 'Country - League' format so the country sits next to the
+        // league everywhere it is displayed AND in download filenames (e.g. England_Premier_League).
         const LEAGUE_NAMES = {
-            'E0': 'English Premier League', 'E1': 'English Championship',
-            'E2': 'English League 1', 'E3': 'English League 2', 'EC': 'English National League',
-            'SC0': 'Scottish Premier League', 'SC1': 'Scottish Championship',
-            'SC2': 'Scottish League 1', 'SC3': 'Scottish League 2',
-            'D1': 'German Bundesliga', 'D2': 'German 2. Bundesliga',
-            'I1': 'Italian Serie A', 'I2': 'Italian Serie B',
-            'SP1': 'Spanish La Liga', 'SP2': 'Spanish Segunda',
-            'F1': 'French Ligue 1', 'F2': 'French Ligue 2',
-            'N1': 'Dutch Eredivisie', 'B1': 'Belgian First Div',
-            'P1': 'Portuguese Liga', 'T1': 'Turkish Super Lig',
-            'G1': 'Greek Super League', 'PO': 'Polish Ekstraklasa'
+            'E0': 'England - Premier League', 'E1': 'England - Championship',
+            'E2': 'England - League 1', 'E3': 'England - League 2', 'EC': 'England - National League',
+            'SC0': 'Scotland - Premier League', 'SC1': 'Scotland - Championship',
+            'SC2': 'Scotland - League 1', 'SC3': 'Scotland - League 2',
+            'D1': 'Germany - Bundesliga', 'D2': 'Germany - 2. Bundesliga',
+            'I1': 'Italy - Serie A', 'I2': 'Italy - Serie B',
+            'SP1': 'Spain - La Liga', 'SP2': 'Spain - Segunda',
+            'F1': 'France - Ligue 1', 'F2': 'France - Ligue 2',
+            'N1': 'Netherlands - Eredivisie', 'B1': 'Belgium - First Div',
+            'P1': 'Portugal - Liga', 'T1': 'Turkey - Super Lig',
+            'G1': 'Greece - Super League', 'PO': 'Poland - Ekstraklasa'
         };
+
+        // Maps common pasted league titles (normalized: lowercase, non-alphanumerics stripped)
+        // to the canonical codes above, so pasted data gets the same 'Country - League' naming.
+        // Titles that match nothing are kept as-is.
+        const LEAGUE_TITLE_ALIASES = {
+            'englishpremierleague': 'E0', 'englandpremierleague': 'E0', 'premierleague': 'E0', 'epl': 'E0',
+            'englishchampionship': 'E1', 'englandchampionship': 'E1', 'championship': 'E1', 'eflchampionship': 'E1', 'skybetchampionship': 'E1',
+            'englishleague1': 'E2', 'englandleague1': 'E2', 'leagueone': 'E2', 'eflleague1': 'E2',
+            'englishleague2': 'E3', 'englandleague2': 'E3', 'leaguetwo': 'E3', 'eflleague2': 'E3',
+            'englishnationalleague': 'EC', 'englandnationalleague': 'EC', 'nationalleague': 'EC', 'vanaramanationalleague': 'EC',
+            'scottishpremierleague': 'SC0', 'scotlandpremierleague': 'SC0', 'scotprem': 'SC0', 'premiership': 'SC0', 'spflpremiership': 'SC0',
+            'scottishchampionship': 'SC1', 'scotlandchampionship': 'SC1',
+            'scottishleagueone': 'SC2', 'scotlandleagueone': 'SC2',
+            'scottishleaguetwo': 'SC3', 'scotlandleaguetwo': 'SC3',
+            'germanbundesliga': 'D1', 'germanybundesliga': 'D1', 'deutschebundesliga': 'D1', 'bundesliga': 'D1',
+            'german2bundesliga': 'D2', 'germany2bundesliga': 'D2', '2bundesliga': 'D2', 'zweitebundesliga': 'D2',
+            'italianseriea': 'I1', 'italyseriea': 'I1', 'seriea': 'I1',
+            'italianserieb': 'I2', 'italyserieb': 'I2', 'serieb': 'I2',
+            'spanishlaliga': 'SP1', 'spainlaliga': 'SP1', 'laliga': 'SP1', 'primeradivision': 'SP1',
+            'spanishsegunda': 'SP2', 'spainsegunda': 'SP2', 'segunda': 'SP2', 'segundadivision': 'SP2', 'laliga2': 'SP2',
+            'frenchligue1': 'F1', 'franceligue1': 'F1', 'ligue1': 'F1',
+            'frenchligue2': 'F2', 'franceligue2': 'F2', 'ligue2': 'F2',
+            'dutcheredivisie': 'N1', 'netherlandseredivisie': 'N1', 'eredivisie': 'N1',
+            'belgianfirstdiv': 'B1', 'belgianfirstdivision': 'B1', 'belgiumfirstdivisiona': 'B1', 'jupilerleague': 'B1',
+            'portugueseliga': 'P1', 'portugalprimeiraliga': 'P1', 'primeiraliga': 'P1', 'ligaportugal': 'P1',
+            'turkishsuperlig': 'T1', 'turkeysuperlig': 'T1', 'superlig': 'T1',
+            'greeksuperleague': 'G1', 'greecesuperleague': 'G1', 'superleaguegreece': 'G1',
+            'polishekstraklasa': 'PO', 'polandekstraklasa': 'PO', 'ekstraklasa': 'PO'
+        };
+
+        function canonLeagueTitle(title) {
+            const key = String(title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (!key) return title;
+            const code = LEAGUE_TITLE_ALIASES[key];
+            return code ? LEAGUE_NAMES[code] : title;
+        }
 
         // ============================================================
         // OpenFootball (github.com/openfootball/football.json) INTEGRATION
@@ -1744,6 +1782,12 @@
                 }
             }
 
+            // Canonicalize the captured title to 'Country - League' when it matches a known
+            // league (e.g. 'Bundesliga' -> 'Germany - Bundesliga'); unknown titles kept as-is.
+            // Raw title kept for skipping the league line inside the match loop.
+            const currentLeagueRaw = currentLeague;
+            currentLeague = canonLeagueTitle(currentLeague);
+
             let pendingDate = null;
             let i = 0;
             while (i < lines.length) {
@@ -1752,8 +1796,8 @@
                 if (SKIP_WORDS.includes(line)) { pendingDate = null; i++; continue; }
                 // Round headers — clear stale pendingDate (date before a round header belongs to matches AFTER the round, not before)
                 if (line.toLowerCase().startsWith("round") || line.includes("finals") || line.includes("group") || line.includes("1/")) { currentRound = line; pendingDate = null; i++; continue; }
-                // Skip the league name line (already captured above)
-                if (line === currentLeague && globalMatches.length === 0 && !isValidDate(line)) { i++; continue; }
+                // Skip the league name line (already captured above) — raw or canonical form
+                if ((line === currentLeague || line === currentLeagueRaw) && globalMatches.length === 0 && !isValidDate(line)) { i++; continue; }
                 // Date lines: store as pending for the next match (handles date-BEFORE-teams format)
                 if (isValidDate(line)) {
                     pendingDate = line;
