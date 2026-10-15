@@ -2141,6 +2141,28 @@
 
         function getPoisson(lambda) { const L = Math.exp(-lambda); let k = 0, p = 1; do { k++; p *= Math.random(); } while (p > L); return k - 1; }
 
+        // Filesystem-safe league slug from the loaded data, used in download filenames so files
+        // from different leagues don't share one name. Multi-season loads dedupe to the league base
+        // (e.g. 'England Premier League 24/25' + '25/26' -> 'England Premier League'); a single
+        // league+season keeps its season ('Serie A 25/26' -> 'Serie_A_25_26'). Falls back to
+        // fixtures (report-only loads), then 'report'.
+        function buildLeagueFileSlug() {
+            const full = new Set();
+            const bases = new Set();
+            const collect = lg => {
+                const s = (lg || '').trim();
+                if (!s || s === 'Unknown' || s === 'Imported') return;
+                full.add(s);
+                bases.add(s.replace(/\s*\d{2}\/\d{2}$/, '').trim());
+            };
+            (globalMatches || []).forEach(m => collect(m.league));
+            if (full.size === 0) (globalFixtures || []).forEach(f => collect(f.league));
+            if (full.size === 0) return 'report';
+            let name = full.size === 1 ? Array.from(full)[0] : Array.from(bases).slice(0, 2).join(' - ');
+            name = name.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '').substring(0, 80);
+            return name || 'report';
+        }
+
         function downloadCSV() {
             if (globalMatches.length === 0) return;
             const hasFTR = globalMatches.length > 0 && globalMatches[0].ftr !== undefined;
@@ -2157,7 +2179,7 @@
                     csvContent += `"${row.date}","${row.homeTeam}","${row.awayTeam}",${row.homeScore},${row.awayScore}\n`;
                 }
             });
-            const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", "techmari_processed_data.csv");
+            const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `techmari_${buildLeagueFileSlug()}_results_${new Date().toISOString().slice(0, 10)}.csv`);
             document.body.appendChild(link); link.click(); document.body.removeChild(link);
         }
 
@@ -2188,7 +2210,7 @@
             }
             csvContent += `"${pred.homeTeam}","${pred.awayTeam}","${lastH2H}","${predictedScore}",${model15Odds},${modelBttsOdds},"${o25Prob}","${o35Prob}",${bttsConfidence},${o15Confidence},"${bttsProb}",${regressionSignal},${zScoreSignal},"${o25KellyPct}"\n`;
             const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent));
-            link.setAttribute("download", `techmari_prediction_${pred.homeTeam}_vs_${pred.awayTeam}_${new Date().toISOString().slice(0,10)}.csv`);
+            link.setAttribute("download", `techmari_prediction_${buildLeagueFileSlug()}_${pred.homeTeam}_vs_${pred.awayTeam}_${new Date().toISOString().slice(0,10)}.csv`);
             document.body.appendChild(link); link.click(); document.body.removeChild(link);
         }
 
@@ -2320,7 +2342,7 @@
             const csvContent = "data:text/csv;charset=utf-8," + csv;
             const link = document.createElement("a");
             link.setAttribute("href", encodeURI(csvContent));
-            link.setAttribute("download", `techmari_entertaining_teams_${new Date().toISOString().slice(0, 10)}.csv`);
+            link.setAttribute("download", `techmari_entertaining_teams_${buildLeagueFileSlug()}_${new Date().toISOString().slice(0, 10)}.csv`);
             document.body.appendChild(link); link.click(); document.body.removeChild(link);
         }
 

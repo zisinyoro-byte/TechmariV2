@@ -61,6 +61,9 @@ ${extract('csvEscape')}
 ${extract('buildEntertainingReportCSV')}
 ${extract('calculateCleanSheetStats')}
 ${extract('renderEntertainerFixtures')}
+${extract('buildLeagueFileSlug')}
+${extract('downloadCSV')}
+${extract('exportEntertainingReportCSV')}
 function renderTable(){ }
 `;
 vm.createContext(sandbox);
@@ -166,6 +169,37 @@ check('panel card shows league', captured.html.includes('England Premier League 
 check('panel shows BOTH ENTERTAINING badge', captured.html.includes('BOTH ENTERTAINING'));
 sandbox.document = origDoc;
 vm.runInContext('globalFixtures = ' + JSON.stringify(synthFixtures), sandbox);
+
+// --- Test 7: league slug in download filenames (user request: files must not share one name) ---
+const todayISO = new Date().toISOString().slice(0, 10);
+vm.runInContext(`globalMatches = [
+  { league: 'England Premier League 25/26', homeTeam: 'A', awayTeam: 'B' },
+  { league: 'England Premier League 24/25', homeTeam: 'A', awayTeam: 'B' }
+]; globalFixtures = [];`, sandbox);
+check('slug: multi-season dedupes to base', vm.runInContext(`buildLeagueFileSlug()`, sandbox) === 'England_Premier_League', vm.runInContext(`buildLeagueFileSlug()`, sandbox));
+vm.runInContext(`globalMatches = [{ league: 'Serie A 25/26', homeTeam: 'A', awayTeam: 'B' }];`, sandbox);
+check('slug: single league+season keeps season', vm.runInContext(`buildLeagueFileSlug()`, sandbox) === 'Serie_A_25_26', vm.runInContext(`buildLeagueFileSlug()`, sandbox));
+vm.runInContext(`globalMatches = [{ league: 'Liga MX Apertura', homeTeam: 'A', awayTeam: 'B' }, { league: 'Championship', homeTeam: 'A', awayTeam: 'B' }];`, sandbox);
+check('slug: two leagues joined (max 2)', vm.runInContext(`buildLeagueFileSlug()`, sandbox) === 'Liga_MX_Apertura_Championship', vm.runInContext(`buildLeagueFileSlug()`, sandbox));
+vm.runInContext(`globalMatches = [{ league: 'Imported', homeTeam: 'A', awayTeam: 'B' }]; globalFixtures = [{ league: 'Bundesliga 25/26', homeTeam: 'A', awayTeam: 'B' }];`, sandbox);
+check('slug: Imported skipped -> fixture fallback', vm.runInContext(`buildLeagueFileSlug()`, sandbox) === 'Bundesliga_25_26', vm.runInContext(`buildLeagueFileSlug()`, sandbox));
+vm.runInContext(`globalMatches = []; globalFixtures = [];`, sandbox);
+check('slug: no data -> report', vm.runInContext(`buildLeagueFileSlug()`, sandbox) === 'report');
+let downloadName = null;
+sandbox.document = {
+  createElement: () => ({ setAttribute(k, v) { if (k === 'download') downloadName = v; }, click() {}, style: {} }),
+  getElementById: () => ({ style: {}, innerText: '', innerHTML: '', classList: { add() {}, remove() {} } }),
+  querySelector: () => ({ innerHTML: '', style: {} }),
+  body: { appendChild() {}, removeChild() {} }
+};
+vm.runInContext(`globalMatches = [{ league: 'Serie A 25/26', date: '20/09/2026', time: '', homeTeam: 'A', awayTeam: 'B', homeScore: 2, awayScore: 1, ftr: 'H' }];`, sandbox);
+vm.runInContext('downloadCSV()', sandbox);
+check('downloadCSV filename includes league + date', downloadName === `techmari_Serie_A_25_26_results_${todayISO}.csv`, downloadName);
+vm.runInContext(`lastAWDTeams = [{ team: 'A', attack: 1.5, defense: 1.2, rawAttack: 1.4, rawDefense: 1.1, avgScored: 2, avgConceded: 1.5, totalGames: 6, combinedScore: 2.7 }];`, sandbox);
+downloadName = null;
+vm.runInContext('exportEntertainingReportCSV()', sandbox);
+check('entertaining report filename includes league + date', downloadName === `techmari_entertaining_teams_Serie_A_25_26_${todayISO}.csv`, downloadName);
+sandbox.document = origDoc;
 
 console.log(failed === 0 ? '\nALL TESTS PASS' : `\n${failed} TEST(S) FAILED`);
 process.exit(failed === 0 ? 0 : 1);
