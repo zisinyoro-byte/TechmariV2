@@ -81,7 +81,9 @@ const els = {
   fhAwaySelect: { value: '', innerHTML: '' },
   fhSelectedMatchCard: { innerHTML: '' },
   fhMatchupsPanel: { hidden: true, classList: { add: () => { panelEl.hidden = true; }, remove: () => { panelEl.hidden = false; } } },
-  fhMatchupsContent: { innerHTML: '' }
+  fhMatchupsContent: { innerHTML: '' },
+  fhSsUrlInput: { value: '' },
+  fhSsFetchBtn: { disabled: false, textContent: 'Fetch FH Tables' }
 };
 const sandbox = {
   console,
@@ -97,9 +99,23 @@ const sandbox = {
 sandbox.globalMatches = [];
 sandbox.globalFixtures = [];
 
+// Browser-standard DOMParser + Node constants from jsdom (dev-only, installed
+// above the repo dir; Node resolves it via the normal upward module walk).
+const { JSDOM } = require('jsdom');
+const domWindow = new JSDOM('').window;
+sandbox.DOMParser = domWindow.DOMParser;
+sandbox.Node = domWindow.Node;
+sandbox.URL = URL;
+sandbox.localStorage = {
+  store: {},
+  getItem(k) { return Object.prototype.hasOwnProperty.call(this.store, k) ? this.store[k] : null; },
+  setItem(k, v) { this.store[k] = String(v); }
+};
+
 function extract(name) {
-  const start = js.indexOf(`function ${name}(`);
+  let start = js.indexOf(`function ${name}(`);
   if (start === -1) throw new Error('function not found: ' + name);
+  if (start >= 6 && js.slice(start - 6, start) === 'async ') start -= 6;  // keep async keyword
   let i = js.indexOf('{', start), depth = 0, end = -1;
   for (; i < js.length; i++) {
     if (js[i] === '{') depth++;
@@ -145,6 +161,11 @@ ${extract('renderFHSelectedMatch')}
 ${extract('clearFHData')}
 ${extract('buildFHFileSlug')}
 ${extract('exportFHReportCSV')}
+${extract('soccerstatsTableLines')}
+${extract('fhLeagueFromPageTitle')}
+${extract('fhLeagueFromSoccerstatsUrl')}
+${extract('buildFhPasteFromHtml')}
+${extract('fetchSoccerstatsFH')}
 `;
 vm.createContext(sandbox);
 vm.runInContext(code, sandbox);
@@ -390,5 +411,90 @@ vm.runInContext('processFHTable()', sandbox);
 check('merge: second paste adds Home, keeps Overall', els.fhTableStatus.innerText.includes('Home') && els.fhTableStatus.innerText.includes('away derived'), els.fhTableStatus.innerText);
 check('merge: still 20 teams', els.fhTableStatus.innerText.includes('20 teams parsed'), els.fhTableStatus.innerText);
 
-console.log(failed === 0 ? '\nALL TESTS PASS' : `\n${failed} TEST(S) FAILED`);
-process.exit(failed === 0 ? 0 : 1);
+// --- Test 16: SoccerSTATS.com auto-fetch (HTML -> paste format -> pipeline) ---
+function htmlTable(rows, opts) {
+  const { header = true, linkedTeam = true } = opts || {};
+  const trs = [];
+  if (header) trs.push('<tr><th></th><th></th><th>GP</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th></tr>');
+  rows.forEach(r => {
+    const cells = r.split('\t');
+    const teamCell = linkedTeam ? `<td><a href="/team/123">${cells[1]}</a></td>` : `<td>${cells[1]}</td>`;
+    trs.push(`<tr><td>${cells[0]}</td>${teamCell}${cells.slice(2).map(c => `<td>${c}</td>`).join('')}</tr>`);
+  });
+  return `<table><tbody>${trs.join('')}</tbody></table>`;
+}
+const SIX = ['Heracles Almelo', 'FC Volendam', 'VVV-Venlo', 'NAC Breda', 'Almere City', 'Jong FC Utrecht'];
+const overallSix = SAMPLE.split('\n').filter(l => l.includes('\t') && !/^GP/.test(l) && SIX.includes(l.split('\t')[1]));
+const homeRowsHtml = HOME_TABLE.split('\n').filter(l => l.includes('\t') && !/^GP/.test(l));
+const awayRowsHtml = AWAY_TABLE.split('\n').filter(l => l.includes('\t') && !/^GP/.test(l));
+const SS_URL = 'https://www.soccerstats.com/en-gb/leagues/netherlands/eerste-divisie/ned2/halftime';
+const SS_HTML = `<!DOCTYPE html><html><head><title>Netherlands - Eerste Divisie - First Half / Second Half stats - SoccerSTATS.com</title></head><body>
+<h1>Netherlands - Eerste Divisie</h1>
+<div class="advert">${htmlTable(['1\tAdvertisement slot\tx'], { header: false, linkedTeam: false })}</div>
+<h2>First Half table (1-45 min.)</h2>
+${htmlTable(overallSix)}
+<h2>Second Half table (46-90 min.)</h2>
+${htmlTable(['1\tHeracles Almelo\t14\t6\t4\t4\t14\t11\t+3\t22'])}
+<h2>First Half table (AT HOME, 1-45 min.)</h2>
+${htmlTable(homeRowsHtml)}
+<h2>First Half table (AWAY, 1-45 min.)</h2>
+${htmlTable(awayRowsHtml)}
+</body></html>`;
+
+(async () => {
+  vm.runInContext('clearFHData()', sandbox);
+  els.fhLeagueInput.value = '';
+  check('ss: league from page title', vm.runInContext(`fhLeagueFromPageTitle('Netherlands - Eerste Divisie - First Half / Second Half stats - SoccerSTATS.com')`, sandbox) === 'Netherlands - Eerste Divisie');
+  check('ss: league from URL slugs', vm.runInContext(`fhLeagueFromSoccerstatsUrl('https://www.soccerstats.com/en-gb/leagues/netherlands/eerste-divisie/ned2/halftime')`, sandbox) === 'Netherlands - Eerste Divisie');
+  const built = JSON.parse(vm.runInContext(`JSON.stringify(buildFhPasteFromHtml(${JSON.stringify(SS_HTML)}, ${JSON.stringify(SS_URL)}))`, sandbox));
+  check('ss: extraction ok with canonical league', built.ok === true && built.league === 'Netherlands - Eerste Divisie', JSON.stringify(built).slice(0, 160));
+  check('ss: found 3 FH tables + 1 SH skipped', built.found.overall === 1 && built.found.home === 1 && built.found.away === 1 && built.found.second === 1, JSON.stringify(built.found));
+  const builtSegs = JSON.parse(vm.runInContext(`JSON.stringify(parseFHPaste((${JSON.stringify(built.text)}).split('\\n').map(l => l.trim()).filter(l => l.length > 0)))`, sandbox));
+  check('ss: generated paste -> 6/6/6 rows', builtSegs.segs.overall.length === 6 && builtSegs.segs.home.length === 6 && builtSegs.segs.away.length === 6, JSON.stringify({ o: builtSegs.segs.overall.length, h: builtSegs.segs.home.length, a: builtSegs.segs.away.length }));
+  const blocked = JSON.parse(vm.runInContext(`JSON.stringify(buildFhPasteFromHtml('<html><head><title>Attention Required! | Cloudflare</title></head><body><div>Sorry, you have been blocked</div></body></html>', ''))`, sandbox));
+  check('ss: blocked page -> clear error', blocked.ok === false && blocked.error.includes('No First/Second Half tables found'), blocked.error);
+  check('ss: empty html -> error', JSON.parse(vm.runInContext(`JSON.stringify(buildFhPasteFromHtml('', ''))`, sandbox)).ok === false);
+
+  // Full fetch flow via mocked fetch()
+  vm.runInContext('clearFHData()', sandbox);
+  els.fhLeagueInput.value = '';
+  els.fhSsUrlInput.value = 'www.soccerstats.com/en-gb/leagues/netherlands/eerste-divisie/ned2/halftime';  // no protocol -> auto-prefixed
+  let fetchCalls = [];
+  sandbox.fetch = async (u) => { fetchCalls.push(u); return { ok: true, status: 200, headers: { get: () => 'direct' }, text: async () => SS_HTML, json: async () => ({}) }; };
+  await vm.runInContext('fetchSoccerstatsFH()', sandbox);
+  check('ss fetch: proxy called with encoded URL', fetchCalls.length === 1 && fetchCalls[0].startsWith('/api/soccerstats.js?url=') && fetchCalls[0].includes('soccerstats.com%2Fen-gb'), fetchCalls[0]);
+  check('ss fetch: textarea filled with all 3 titles', els.fhRawInput.value.includes('First Half table (1-45 min.)') && els.fhRawInput.value.includes('First Half table (AT HOME, 1-45 min.)') && els.fhRawInput.value.includes('First Half table (AWAY, 1-45 min.)'));
+  check('ss fetch: league input auto-filled', els.fhLeagueInput.value === 'Netherlands - Eerste Divisie', els.fhLeagueInput.value);
+  check('ss fetch: status prefix + parse summary', els.fhTableStatus.innerText.startsWith('Fetched from SoccerSTATS.com (via direct): Overall + Home + Away table(s) (1 second-half table(s) skipped).') && els.fhTableStatus.innerText.includes('6 teams parsed') && els.fhTableStatus.innerText.includes('Netherlands - Eerste Divisie'), els.fhTableStatus.innerText);
+  check('ss fetch: 6 teams ranked', vm.runInContext('fhTableTeams.length', sandbox) === 6);
+  const ssHer = JSON.parse(vm.runInContext(`JSON.stringify(fhTableTeams.find(t => t.team === 'Heracles Almelo'))`, sandbox));
+  check('ss fetch: Heracles 2.43 home / 1.71 away / Home-tilted', ssHer && ssHer.homeGpm.toFixed(2) === '2.43' && ssHer.awayGpm.toFixed(2) === '1.71' && ssHer.profile === 'Home-tilted', JSON.stringify(ssHer).slice(0, 160));
+  check('ss fetch: URL saved to localStorage', sandbox.localStorage.getItem('techmari_fh_ss_url') === SS_URL, sandbox.localStorage.getItem('techmari_fh_ss_url'));
+  check('ss fetch: button re-enabled', els.fhSsFetchBtn.disabled === false && els.fhSsFetchBtn.textContent === 'Fetch FH Tables');
+
+  // Proxy hard failure -> clear error, textarea untouched
+  els.fhRawInput.value = 'SENTINEL';
+  sandbox.fetch = async () => ({ ok: false, status: 502, headers: { get: () => '' }, text: async () => '{}', json: async () => ({ error: 'soccerstats_unreachable', detail: ' Both fetch paths failed.' }) });
+  await vm.runInContext('fetchSoccerstatsFH()', sandbox);
+  check('ss fetch: HTTP 502 -> failure message', els.fhTableStatus.innerText.includes('Fetch failed (HTTP 502).') && els.fhTableStatus.innerText.includes('Both fetch paths failed.'), els.fhTableStatus.innerText);
+  check('ss fetch: textarea untouched on failure', els.fhRawInput.value === 'SENTINEL');
+  check('ss fetch: status red on failure', els.fhTableStatus.style.color === '#dc3545');
+
+  // Proxy returns a block page (no tables) -> parse-level error with paste hint
+  sandbox.fetch = async () => ({ ok: true, status: 200, headers: { get: () => 'direct' }, text: async () => '<html><head><title>Attention Required! | Cloudflare</title></head><body><h1>Sorry, you have been blocked</h1></body></html>', json: async () => ({}) });
+  await vm.runInContext('fetchSoccerstatsFH()', sandbox);
+  check('ss fetch: blocked page -> hint to paste manually', els.fhTableStatus.innerText.includes('SoccerSTATS fetch: No First/Second Half tables found') && els.fhTableStatus.innerText.includes('paste the tables manually'), els.fhTableStatus.innerText);
+
+  // Non-soccerstats URL rejected without any network call
+  fetchCalls = [];
+  els.fhSsUrlInput.value = 'https://example.com/halftime';
+  sandbox.fetch = async (u) => { fetchCalls.push(u); return { ok: true, status: 200, headers: { get: () => '' }, text: async () => SS_HTML, json: async () => ({}) }; };
+  await vm.runInContext('fetchSoccerstatsFH()', sandbox);
+  check('ss fetch: foreign domain rejected, no fetch', fetchCalls.length === 0 && els.fhTableStatus.innerText.includes('Only soccerstats.com URLs are supported.'), els.fhTableStatus.innerText);
+})().then(() => {
+  console.log(failed === 0 ? '\nALL TESTS PASS' : `\n${failed} TEST(S) FAILED`);
+  process.exit(failed === 0 ? 0 : 1);
+}).catch(e => {
+  console.error('FAIL: async exception ->', e && (e.stack || e.message));
+  process.exit(1);
+});

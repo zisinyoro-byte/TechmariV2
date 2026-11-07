@@ -780,7 +780,17 @@
         </div>
         <div id="fhTableSection">
             <h3>First Half Entertaining Teams (FH Table)</h3>
-            <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Paste First Half standings tables (1-45 min) &mdash; <strong>Overall</strong>, <strong>Home</strong> and/or <strong>Away</strong>, each introduced by its own title line (e.g. <em>First Half table (1-45 min.)</em>, <em>First Half home table</em>, <em>First Half away table</em>). Columns: Pos, Team, GP, W, D, L, GF, GA, GD, Pts &mdash; tab- or multi-space separated. Teams are ranked by average FH goals per match (1.5+ = FH entertaining). Home/Away tables add per-venue FH rates and <strong>expected FH goals for upcoming fixtures</strong> (host uses its Home rate, visitor its Away rate). Missing splits are derived automatically (Overall&minus;Home / Overall&minus;Away, or Home+Away when Overall is absent). The fixture and team dropdowns below the table pull up any upcoming matchup (or custom pairing) on demand.</p>
+            <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Paste First Half standings tables (1-45 min) &mdash; <strong>Overall</strong>, <strong>Home</strong> and/or <strong>Away</strong>, each introduced by its own title line (e.g. <em>First Half table (1-45 min.)</em>, <em>First Half home table</em>, <em>First Half away table</em>). Columns: Pos, Team, GP, W, D, L, GF, GA, GD, Pts &mdash; tab- or multi-space separated. Teams are ranked by average FH goals per match (1.5+ = FH entertaining). Home/Away tables add per-venue FH rates and <strong>expected FH goals for upcoming fixtures</strong> (host uses its Home rate, visitor its Away rate). Missing splits are derived automatically (Overall&minus;Home / Overall&minus;Away, or Home+Away when Overall is absent). The fixture and team dropdowns below the table pull up any upcoming matchup (or custom pairing) on demand. <strong>Auto-fetch:</strong> on soccerstats.com open your league &rarr; the <em>First Half / Second Half stats</em> (Half-time) page, copy its URL below and hit <em>Fetch FH Tables</em> &mdash; the Overall + Home + Away tables are pulled and processed in one go.</p>
+            <div class="datasource-row">
+                <div class="control-group" style="flex:1;">
+                    <label>Auto-fetch from SoccerSTATS.com &mdash; Half-time stats page URL</label>
+                    <input type="text" id="fhSsUrlInput" placeholder="https://www.soccerstats.com/en-gb/leagues/netherlands/eerste-divisie/ned2/halftime">
+                </div>
+                <div class="control-group" style="flex: 0 0 auto;">
+                    <label>&nbsp;</label>
+                    <button class="btn-fetch" id="fhSsFetchBtn" onclick="fetchSoccerstatsFH()">Fetch FH Tables</button>
+                </div>
+            </div>
             <div class="datasource-row">
                 <div class="control-group" style="flex:1;">
                     <label>League name (optional &mdash; used in report + filename)</label>
@@ -2552,6 +2562,151 @@
             }
             return '';
         }
+
+        // ---- SoccerSTATS.com auto-fetch (First Half / Second Half stats page) ----
+        // Converts the fetched page's half-time tables into exactly the paste-box
+        // text format, then reuses the normal processFHTable() pipeline unchanged.
+
+        // One HTML table -> paste-format tab lines (each row validated by parseFHTableRow).
+        function soccerstatsTableLines(tableEl) {
+            const out = [];
+            Array.from(tableEl.querySelectorAll('tr')).forEach(tr => {
+                const cells = Array.from(tr.querySelectorAll('td,th')).map(c => String(c.textContent || '').trim().replace(/\s+/g, ' '));
+                if (cells.length === 0) return;
+                const row = parseFHTableRow(cells.join('\t'));
+                if (row && row !== 'HEADER') out.push(cells.filter(c => c !== '').join('\t'));
+            });
+            return out;
+        }
+
+        // Page <title> 'ENGLAND - League One - First Half / Second Half stats - SoccerSTATS.com'
+        // -> 'England - League One' (canonLeagueTitle() then maps known leagues).
+        function fhLeagueFromPageTitle(title) {
+            let t = String(title || '')
+                .replace(/\s*-\s*SoccerSTATS\.com[\s\S]*$/i, '')
+                .replace(/\s*-\s*(first|second) half[\s\S]*$/i, '')
+                .replace(/\s*[-\u2013\u2014|]+\s*$/, '')
+                .trim();
+            if (!t) return '';
+            return t.split(/\s+/).map(w => /^[A-Z]{4,}$/.test(w) ? w.charAt(0) + w.slice(1).toLowerCase() : w).join(' ');
+        }
+
+        // URL slugs '/leagues/netherlands/eerste-divisie/ned2/...' -> 'Netherlands - Eerste Divisie'
+        function fhLeagueFromSoccerstatsUrl(u) {
+            const m = String(u || '').match(/\/leagues\/([a-z0-9-]+)\/([a-z0-9-]+)/i);
+            if (!m) return '';
+            const tc = s => s.split('-').map(w => w ? w.charAt(0).toUpperCase() + w.slice(1) : w).join(' ');
+            return tc(m[1]) + ' - ' + tc(m[2]);
+        }
+
+        // Extracts the half-table sections from the fetched page HTML.
+        // Returns { ok, text, league, found: {overall, home, away, second}, error }.
+        function buildFhPasteFromHtml(html, pageUrl) {
+            const found = { overall: 0, home: 0, away: 0, second: 0 };
+            const empty = { ok: false, text: '', league: '', found, error: '' };
+            let doc;
+            try { doc = new DOMParser().parseFromString(String(html || ''), 'text/html'); }
+            catch (e) { return { ...empty, error: 'Could not parse the fetched page.' }; }
+            const league = canonLeagueTitle(fhLeagueFromPageTitle(doc.title || ''))
+                || canonLeagueTitle(fhLeagueFromSoccerstatsUrl(pageUrl)) || '';
+            const titleEls = Array.from(doc.querySelectorAll('*')).filter(el =>
+                el.children.length === 0 && el.textContent && String(el.textContent).length < 90
+                && /first half table|second half table/i.test(el.textContent));
+            if (titleEls.length === 0) {
+                return { ...empty, league, error: 'No First/Second Half tables found on that page. If the site blocked the fetch, open the URL in your browser and paste the tables manually.' };
+            }
+            const tables = Array.from(doc.querySelectorAll('table'));
+            const claimed = new Set();
+            const lines = [];
+            const imported = { overall: 0, home: 0, away: 0 };
+            titleEls.forEach(tEl => {
+                const rawTitle = String(tEl.textContent).trim();
+                const variant = detectFHVARIANT(rawTitle);
+                if (!variant) return;
+                found[variant] += 1;
+                if (variant === 'second') return;   // counted, never imported
+                if (imported[variant] > 0) return;  // duplicate section — first occurrence wins
+                for (const t of tables) {
+                    if (claimed.has(t)) continue;
+                    if (!(tEl.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+                    const rowLines = soccerstatsTableLines(t);
+                    if (rowLines.length === 0) continue;   // stray/ad table — keep looking
+                    claimed.add(t);
+                    imported[variant] += 1;
+                    lines.push(rawTitle, 'GP\tW\tD\tL\tGF\tGA\tGD\tPts');
+                    lines.push(...rowLines);
+                    break;
+                }
+            });
+            if (imported.overall + imported.home + imported.away === 0) {
+                return { ...empty, league, error: 'Half-table titles were found but none of them had a parsable table (site layout may have changed).' };
+            }
+            return { ok: true, text: lines.join('\n'), league, found: { overall: imported.overall, home: imported.home, away: imported.away, second: found.second } };
+        }
+
+        // Fetch button: pulls the Half-time stats page through the serverless
+        // proxy (/api/soccerstats.js), converts it and processes it like a paste.
+        async function fetchSoccerstatsFH() {
+            const btn = document.getElementById('fhSsFetchBtn');
+            const statusArea = document.getElementById('fhTableStatus');
+            const urlInput = document.getElementById('fhSsUrlInput');
+            const resetBtn = () => { if (btn) { btn.disabled = false; btn.textContent = 'Fetch FH Tables'; } };
+            const fail = msg => { statusArea.innerText = msg; statusArea.style.color = '#dc3545'; resetBtn(); };
+            const rawTarget = ((urlInput && urlInput.value) || '').trim();
+            if (!rawTarget) {
+                fail('Paste a SoccerSTATS.com Half-time stats page URL first, e.g. https://www.soccerstats.com/en-gb/leagues/netherlands/eerste-divisie/ned2/halftime');
+                return;
+            }
+            let target = rawTarget;
+            if (!/^https?:\/\//i.test(target)) {
+                if (!/soccerstats\.com/i.test(target)) { fail('That does not look like a soccerstats.com URL.'); return; }
+                target = 'https://' + target.replace(/^\/+/, '');
+            }
+            let parsed;
+            try { parsed = new URL(target); } catch (e) { fail('Invalid URL.'); return; }
+            if (!/(^|\.)soccerstats\.com$/i.test(parsed.hostname)) { fail('Only soccerstats.com URLs are supported.'); return; }
+            if (btn) { btn.disabled = true; btn.textContent = 'Fetching\u2026'; }
+            statusArea.innerText = 'Fetching FH tables from SoccerSTATS.com\u2026';
+            statusArea.style.color = '#6c757d';
+            try {
+                const resp = await fetch('/api/soccerstats.js?url=' + encodeURIComponent(parsed.href));
+                if (!resp.ok) {
+                    let detail = '';
+                    try { const j = await resp.json(); if (j && j.detail) detail = ' ' + j.detail; } catch (e) {}
+                    fail('Fetch failed (HTTP ' + resp.status + ').' + detail);
+                    return;
+                }
+                const html = await resp.text();
+                const via = resp.headers && resp.headers.get ? (resp.headers.get('X-Soccerstats-Via') || '') : '';
+                const built = buildFhPasteFromHtml(html, parsed.href);
+                if (!built.ok) { fail('SoccerSTATS fetch: ' + built.error); return; }
+                const ta = document.getElementById('fhRawInput');
+                if (ta) ta.value = built.text;
+                const leagueInput = document.getElementById('fhLeagueInput');
+                if (leagueInput && built.league) leagueInput.value = built.league;
+                try { if (typeof localStorage !== 'undefined') localStorage.setItem('techmari_fh_ss_url', parsed.href); } catch (e) {}
+                processFHTable();
+                const prefix = 'Fetched from SoccerSTATS.com' + (via ? ' (via ' + via + ')' : '') + ': '
+                    + ['Overall', 'Home', 'Away'].filter((v, i) => [built.found.overall, built.found.home, built.found.away][i] > 0).join(' + ')
+                    + ' table(s)' + (built.found.second ? ' (' + built.found.second + ' second-half table(s) skipped)' : '') + '. ';
+                if (statusArea && fhTableTeams.length > 0) {
+                    statusArea.innerText = prefix + statusArea.innerText;
+                    statusArea.style.color = '#28a745';
+                }
+                resetBtn();
+            } catch (e) {
+                fail('Fetch error: ' + e.message + ' — the paste box below still works manually.');
+            }
+        }
+
+        // Prefill the SoccerSTATS URL box with the last successful fetch.
+        try {
+            if (typeof localStorage !== 'undefined') {
+                const savedSsUrl = localStorage.getItem('techmari_fh_ss_url');
+                const ssInput = document.getElementById('fhSsUrlInput');
+                if (savedSsUrl && ssInput && !ssInput.value) ssInput.value = savedSsUrl;
+            }
+        } catch (e) {}
 
         // homeRows/awayRows optional: raw (or derived) venue rows keyed by team name.
         function rankFHTeams(teams, homeRows, awayRows) {
