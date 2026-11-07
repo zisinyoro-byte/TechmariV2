@@ -780,7 +780,7 @@
         </div>
         <div id="fhTableSection">
             <h3>First Half Entertaining Teams (FH Table)</h3>
-            <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Paste a First Half standings table (1-45 min). Columns: Pos, Team, GP, W, D, L, GF, GA, GD, Pts &mdash; tab- or multi-space separated. Teams are ranked by average first-half goals per match; 1.5+ marks an FH entertaining team (FH Over 0.5 / 1.5 candidates).</p>
+            <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Paste First Half standings tables (1-45 min) &mdash; <strong>Overall</strong>, <strong>Home</strong> and/or <strong>Away</strong>, each introduced by its own title line (e.g. <em>First Half table (1-45 min.)</em>, <em>First Half home table</em>, <em>First Half away table</em>). Columns: Pos, Team, GP, W, D, L, GF, GA, GD, Pts &mdash; tab- or multi-space separated. Teams are ranked by average FH goals per match (1.5+ = FH entertaining). Home/Away tables add per-venue FH rates and <strong>expected FH goals for upcoming fixtures</strong> (host uses its Home rate, visitor its Away rate). Missing splits are derived automatically (Overall&minus;Home / Overall&minus;Away, or Home+Away when Overall is absent).</p>
             <div class="datasource-row">
                 <div class="control-group" style="flex:1;">
                     <label>League name (optional &mdash; used in report + filename)</label>
@@ -791,11 +791,16 @@
                     <button class="btn-fetch" onclick="processFHTable()">Process FH Table</button>
                 </div>
             </div>
-            <textarea id="fhRawInput" style="min-height:140px;" placeholder="Paste the First Half table here, e.g.&#10;First Half table (1-45 min.)&#10;GP  W  D  L  GF  GA  GD  Pts&#10;1  Heracles Almelo  14  10  3  1  23  6  +17  33&#10;2  FC Volendam  14  8  3  3  15  8  +7  27"></textarea>
+            <textarea id="fhRawInput" style="min-height:160px;" placeholder="Paste one or more First Half tables, e.g.&#10;First Half table (1-45 min.)&#10;GP  W  D  L  GF  GA  GD  Pts&#10;1  Heracles Almelo  14  10  3  1  23  6  +17  33&#10;2  FC Volendam  14  8  3  3  15  8  +7  27&#10;...&#10;First Half home table&#10;GP  W  D  L  GF  GA  GD  Pts&#10;1  Heracles Almelo  7  6  1  0  15  2  +13  19&#10;...&#10;First Half away table&#10;GP  W  D  L  GF  GA  GD  Pts&#10;1  ..."></textarea>
             <div id="fhTableStatus" style="font-size:12px; margin-top:8px;"></div>
             <div id="fhTableContent" style="margin-top:12px;"></div>
+            <div id="fhMatchupsPanel" class="hidden" style="margin-top: 18px;">
+                <div class="matchup-title">Upcoming: Expected First-Half Goals</div>
+                <div id="fhMatchupsContent"></div>
+            </div>
             <div style="margin-top: 14px; text-align: center;">
                 <button id="fhExportBtn" onclick="exportFHReportCSV()" class="btn-export" style="display:none;">Download FH Entertaining Teams Report (CSV)</button>
+                <button onclick="clearFHData()" class="btn-fetch" style="margin-left:8px; background:#6c757d;">Clear FH Data</button>
             </div>
         </div>
         <div id="insightsSection" class="hidden">
@@ -2439,6 +2444,64 @@
         // (tab- or multi-space-separated). Ranks teams by average first-half goals per match.
         let fhTableTeams = [];
         let fhLeague = '';
+        let fhTableData = { overall: [], home: [], away: [] };   // last processed rows per variant
+        let fhSplitSource = { overall: 'none', home: 'none', away: 'none' };  // pasted | derived | none
+
+        function fhGpm(row) { return row && row.gp > 0 ? (row.gf + row.ga) / row.gp : null; }
+
+        // Home + Away -> Overall
+        function sumFHSplit(a, b) {
+            if (!a || !b) return null;
+            const gf = a.gf + b.gf, ga = a.ga + b.ga;
+            return { pos: null, team: a.team, gp: a.gp + b.gp, w: a.w + b.w, d: a.d + b.d, l: a.l + b.l,
+                     gf, ga, gd: gf - ga, pts: a.pts + b.pts, derived: true };
+        }
+
+        // Overall - Home (or Overall - Away) -> the missing venue split
+        function diffFHSplit(total, part) {
+            if (!total || !part) return null;
+            const gp = total.gp - part.gp, gf = total.gf - part.gf, ga = total.ga - part.ga;
+            if (!Number.isFinite(gp) || !Number.isFinite(gf) || !Number.isFinite(ga) || gp < 0 || gf < 0 || ga < 0) return null;
+            return { pos: null, team: total.team, gp, w: total.w - part.w, d: total.d - part.d, l: total.l - part.l,
+                     gf, ga, gd: gf - ga, pts: total.pts - part.pts, derived: true };
+        }
+
+        // 'First Half table (1-45 min.)' -> overall | 'First Half home table' -> home | 'First Half away table' -> away
+        function detectFHVARIANT(title) {
+            const t = String(title || '');
+            if (!/first half|second half|1-45|45 min/i.test(t)) return null;
+            if (/second half/i.test(t)) return 'second';
+            if (/\bhome\b/i.test(t)) return 'home';
+            if (/\baway\b/i.test(t)) return 'away';
+            return 'overall';
+        }
+
+        // 'Eerste Divisie - First Half home table' -> 'Eerste Divisie'
+        function extractLeagueFromFhTitle(title) {
+            const m = String(title || '').match(/^(.*?)\bfirst half\b/i);
+            if (!m) return '';
+            const pre = m[1].replace(/[-\u2013\u2014:|,()]+/g, ' ').replace(/\s+/g, ' ').trim();
+            return pre.length >= 3 ? pre : '';
+        }
+
+        // Splits a paste that may contain any combination of Overall / Home / Away FH tables,
+        // each introduced by its own title line. Rows before any title default to Overall.
+        function parseFHPaste(lines) {
+            const segs = { overall: [], home: [], away: [] };
+            let cur = 'overall', firstTitle = '';
+            (lines || []).forEach(l => {
+                const variant = detectFHVARIANT(l);
+                if (variant) {
+                    if (!firstTitle && variant !== 'second') firstTitle = l;
+                    cur = variant;
+                    return;
+                }
+                const row = parseFHTableRow(l);
+                if (row === 'HEADER') return;
+                if (row && cur !== 'second') segs[cur].push(row);
+            });
+            return { segs, firstTitle };
+        }
 
         function parseFHTableRow(line) {
             let cells = String(line).split('\t').map(c => c.trim()).filter(c => c !== '');
@@ -2471,16 +2534,30 @@
             return '';
         }
 
-        function rankFHTeams(teams) {
+        // homeRows/awayRows optional: raw (or derived) venue rows keyed by team name.
+        function rankFHTeams(teams, homeRows, awayRows) {
             const FH_THRESHOLD = 1.5;
-            return teams.map(t => ({
-                pos: t.pos, team: t.team, gp: t.gp, w: t.w, d: t.d, l: t.l, gf: t.gf, ga: t.ga, gd: t.gd, pts: t.pts,
-                goalsPerMatch: (t.gf + t.ga) / t.gp,
-                gfPerMatch: t.gf / t.gp,
-                gaPerMatch: t.ga / t.gp,
-                ptsPerMatch: t.pts / t.gp
-            })).sort((a, b) => b.goalsPerMatch - a.goalsPerMatch || (b.gf + b.ga) - (a.gf + a.ga))
-              .map(t => { t.entertaining = t.goalsPerMatch >= FH_THRESHOLD; return t; });
+            const key = s => String(s || '').toLowerCase();
+            const homeMap = new Map((homeRows || []).map(r => [key(r.team), r]));
+            const awayMap = new Map((awayRows || []).map(r => [key(r.team), r]));
+            return teams.map(t => {
+                const home = homeMap.get(key(t.team)) || null;
+                const away = awayMap.get(key(t.team)) || null;
+                const homeGpm = fhGpm(home), awayGpm = fhGpm(away);
+                const profile = homeGpm !== null && awayGpm !== null
+                    ? (homeGpm - awayGpm >= 0.25 ? 'Home-tilted' : awayGpm - homeGpm >= 0.25 ? 'Away-tilted' : 'Balanced')
+                    : (homeGpm !== null ? 'Home only' : awayGpm !== null ? 'Away only' : '');
+                return {
+                    pos: t.pos, team: t.team, gp: t.gp, w: t.w, d: t.d, l: t.l, gf: t.gf, ga: t.ga, gd: t.gd, pts: t.pts,
+                    goalsPerMatch: (t.gf + t.ga) / t.gp,
+                    gfPerMatch: t.gf / t.gp,
+                    gaPerMatch: t.ga / t.gp,
+                    ptsPerMatch: t.pts / t.gp,
+                    homeGp: home ? home.gp : null, homeGpm,
+                    awayGp: away ? away.gp : null, awayGpm,
+                    profile, entertaining: (t.gf + t.ga) / t.gp >= FH_THRESHOLD
+                };
+            }).sort((a, b) => b.goalsPerMatch - a.goalsPerMatch || (b.gf + b.ga) - (a.gf + a.ga));
         }
 
         function processFHTable() {
@@ -2488,20 +2565,56 @@
             const raw = document.getElementById('fhRawInput').value;
             if (!raw.trim()) { statusArea.innerText = 'Please paste a First Half table first.'; statusArea.style.color = '#dc3545'; return; }
             const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-            const inputLeague = (document.getElementById('fhLeagueInput').value || '').trim();
-            fhLeague = canonLeagueTitle(inputLeague || detectFHLeagueTitle(lines)) || 'First Half Table';
-            const teams = [];
-            lines.forEach(l => { const row = parseFHTableRow(l); if (row && row !== 'HEADER') teams.push(row); });
-            if (teams.length === 0) {
+            const parsed = parseFHPaste(lines);
+            const pasted = ['overall', 'home', 'away'].filter(v => parsed.segs[v].length > 0);
+            if (pasted.length === 0) {
                 fhTableTeams = [];
                 statusArea.innerText = 'No valid table rows found. Expected columns: Pos, Team, GP, W, D, L, GF, GA, GD, Pts (tab or multi-space separated).';
                 statusArea.style.color = '#dc3545';
                 renderFHTable();
                 return;
             }
-            fhTableTeams = rankFHTeams(teams);
+            // League: manual input > league line in paste > league embedded in the FH title > keep previous > fallback
+            const inputLeague = (document.getElementById('fhLeagueInput').value || '').trim();
+            const detected = canonLeagueTitle(inputLeague || detectFHLeagueTitle(lines) || extractLeagueFromFhTitle(parsed.firstTitle));
+            if (detected) fhLeague = detected;
+            else if (!fhLeague) fhLeague = 'First Half Table';
+            // Each variant found in this paste replaces its previous data; the others are kept.
+            pasted.forEach(v => { fhTableData[v] = parsed.segs[v]; });
+            const key = s => String(s || '').toLowerCase();
+            const byKey = rows => { const m = new Map(); (rows || []).forEach(r => m.set(key(r.team), r)); return m; };
+            const overallMap = byKey(fhTableData.overall), homeMap = byKey(fhTableData.home), awayMap = byKey(fhTableData.away);
+            const universe = new Map();
+            ['overall', 'home', 'away'].forEach(v => fhTableData[v].forEach(r => { if (!universe.has(key(r.team))) universe.set(key(r.team), r.team); }));
+            let derivedOverall = false, derivedHome = false, derivedAway = false;
+            const baseRows = [], skipped = [];
+            universe.forEach((name, k) => {
+                let o = overallMap.get(k) || null;
+                const h = homeMap.get(k) || null, a = awayMap.get(k) || null;
+                if (!o && h && a) { o = sumFHSplit(h, a); derivedOverall = true; }
+                if (o) baseRows.push(o); else skipped.push(name);
+            });
+            let homeRows = fhTableData.home, awayRows = fhTableData.away;
+            if (fhTableData.overall.length > 0 && homeRows.length > 0 && awayRows.length === 0) {
+                awayRows = fhTableData.overall.map(o => diffFHSplit(o, homeMap.get(key(o.team)))).filter(Boolean);
+                if (awayRows.length > 0) derivedAway = true;
+            } else if (fhTableData.overall.length > 0 && awayRows.length > 0 && homeRows.length === 0) {
+                homeRows = fhTableData.overall.map(o => diffFHSplit(o, awayMap.get(key(o.team)))).filter(Boolean);
+                if (homeRows.length > 0) derivedHome = true;
+            }
+            fhSplitSource = {
+                overall: fhTableData.overall.length > 0 ? 'pasted' : (derivedOverall ? 'derived' : 'none'),
+                home: homeRows.length > 0 ? (fhTableData.home.length > 0 ? 'pasted' : 'derived') : 'none',
+                away: awayRows.length > 0 ? (fhTableData.away.length > 0 ? 'pasted' : 'derived') : 'none'
+            };
+            fhTableTeams = rankFHTeams(baseRows, homeRows, awayRows);
             const entCount = fhTableTeams.filter(t => t.entertaining).length;
-            statusArea.innerText = teams.length + ' teams parsed | ' + fhLeague + ' | ' + entCount + ' entertaining (1.5+ FH goals/match)';
+            const derivedNotes = [derivedOverall ? 'overall derived' : '', derivedHome ? 'home derived' : '', derivedAway ? 'away derived' : ''].filter(Boolean).join(', ');
+            statusArea.innerText = fhTableTeams.length + ' teams parsed'
+                + (skipped.length ? ' (' + skipped.length + ' skipped: need Overall or Home+Away)' : '')
+                + ' | ' + pasted.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' + ')
+                + (derivedNotes ? ' (' + derivedNotes + ')' : '')
+                + ' | ' + fhLeague + ' | ' + entCount + ' entertaining (1.5+ FH goals/match)';
             statusArea.style.color = '#28a745';
             renderFHTable();
         }
@@ -2509,17 +2622,86 @@
         function renderFHTable() {
             const content = document.getElementById('fhTableContent');
             const btn = document.getElementById('fhExportBtn');
-            if (!fhTableTeams || fhTableTeams.length === 0) { content.innerHTML = ''; btn.style.display = 'none'; return; }
+            if (!fhTableTeams || fhTableTeams.length === 0) { content.innerHTML = ''; btn.style.display = 'none'; renderFHMatchups(); return; }
             const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
             const entCount = fhTableTeams.filter(t => t.entertaining).length;
+            const hasSplits = fhTableTeams.some(t => t.homeGpm !== null || t.awayGpm !== null);
             let html = '<div class="matchup-title">' + esc(fhLeague) + ' &mdash; ranked by first-half goals per match (' + entCount + ' entertaining at 1.5+)</div>';
-            html += '<div class="table-wrapper" style="max-height:520px; overflow-y:auto;"><table><thead><tr><th>#</th><th>Team</th><th>GP</th><th>FH GF</th><th>FH GA</th><th>FH Goals/Match</th><th>FH GF/Match</th><th>FH GA/Match</th><th>FH Pts/Match</th><th>Entertaining</th></tr></thead><tbody>';
+            html += '<div class="table-wrapper" style="max-height:520px; overflow-y:auto;"><table><thead><tr><th>#</th><th>Team</th><th>GP</th><th>FH GF</th><th>FH GA</th><th>FH Goals/Match</th><th>FH GF/Match</th><th>FH GA/Match</th><th>FH Pts/Match</th>'
+                + (hasSplits ? '<th>Home FH G/M</th><th>Away FH G/M</th><th>Venue Profile</th>' : '') + '<th>Entertaining</th></tr></thead><tbody>';
             fhTableTeams.forEach((t, i) => {
-                html += '<tr' + (t.entertaining ? ' style="background:rgba(232,62,140,0.08);"' : '') + '><td>' + (i + 1) + '</td><td><strong>' + esc(t.team) + '</strong>' + (t.entertaining ? ' <span class="highlight-badge" style="background:#e83e8c;">FH HOT</span>' : '') + '</td><td>' + t.gp + '</td><td>' + t.gf + '</td><td>' + t.ga + '</td><td><strong>' + t.goalsPerMatch.toFixed(2) + '</strong></td><td>' + t.gfPerMatch.toFixed(2) + '</td><td>' + t.gaPerMatch.toFixed(2) + '</td><td>' + t.ptsPerMatch.toFixed(2) + '</td><td>' + (t.entertaining ? 'YES' : '-') + '</td></tr>';
+                html += '<tr' + (t.entertaining ? ' style="background:rgba(232,62,140,0.08);"' : '') + '><td>' + (i + 1) + '</td><td><strong>' + esc(t.team) + '</strong>' + (t.entertaining ? ' <span class="highlight-badge" style="background:#e83e8c;">FH HOT</span>' : '') + '</td><td>' + t.gp + '</td><td>' + t.gf + '</td><td>' + t.ga + '</td><td><strong>' + t.goalsPerMatch.toFixed(2) + '</strong></td><td>' + t.gfPerMatch.toFixed(2) + '</td><td>' + t.gaPerMatch.toFixed(2) + '</td><td>' + t.ptsPerMatch.toFixed(2) + '</td>'
+                    + (hasSplits ? '<td>' + (t.homeGpm !== null ? t.homeGpm.toFixed(2) : '-') + '</td><td>' + (t.awayGpm !== null ? t.awayGpm.toFixed(2) : '-') + '</td><td>' + (t.profile || '-') + '</td>' : '')
+                    + '<td>' + (t.entertaining ? 'YES' : '-') + '</td></tr>';
             });
             html += '</tbody></table></div>';
+            if (fhSplitSource.home !== 'none' || fhSplitSource.away !== 'none') {
+                html += '<div style="font-size:12px; color:#6c757d; margin-top:8px;">Venue rates: host uses its Home FH goals/match, visitor its Away FH goals/match'
+                    + (fhSplitSource.home === 'derived' || fhSplitSource.away === 'derived' ? ' (' + [fhSplitSource.home === 'derived' ? 'home' : '', fhSplitSource.away === 'derived' ? 'away' : ''].filter(Boolean).join(' & ') + ' derived as Overall minus pasted split)' : '')
+                    + '.</div>';
+            }
             content.innerHTML = html;
             btn.style.display = 'inline-block';
+            renderFHMatchups();
+        }
+
+        // Expected first-half goals for a matchup: hosts use their Home FH rate, visitors their Away FH rate.
+        // Falls back to the Overall rate when a venue split is unavailable.
+        function expectedFHGoals(homeTeam, awayTeam) {
+            const key = s => String(s || '').toLowerCase();
+            const h = (fhTableTeams || []).find(t => key(t.team) === key(homeTeam));
+            const a = (fhTableTeams || []).find(t => key(t.team) === key(awayTeam));
+            if (!h || !a) return null;
+            const hVenue = h.homeGpm !== null ? h.homeGpm : h.goalsPerMatch;
+            const aVenue = a.awayGpm !== null ? a.awayGpm : a.goalsPerMatch;
+            const confidence = h.homeGpm !== null && a.awayGpm !== null ? 'HIGH' : (h.homeGpm !== null || a.awayGpm !== null) ? 'MEDIUM' : 'LOW';
+            return { home: h, away: a, hVenue, aVenue, exp: (hVenue + aVenue) / 2, confidence };
+        }
+
+        function getUpcomingFHMatchups(fixtures, fromDateUK) {
+            if (!fhTableTeams || fhTableTeams.length === 0 || !fixtures || fixtures.length === 0) return [];
+            const from = parseDateForSort(fromDateUK);
+            return sortMatchesByDate(fixtures.filter(f => parseDateForSort(f.date) >= from))
+                .map(f => {
+                    const e = expectedFHGoals(f.homeTeam, f.awayTeam);
+                    return e ? { date: f.date, round: f.round || '', league: f.league || '', homeTeam: f.homeTeam, awayTeam: f.awayTeam,
+                                 hVenue: e.hVenue, aVenue: e.aVenue, exp: e.exp, confidence: e.confidence, hot: e.exp >= 1.5 } : null;
+                })
+                .filter(Boolean)
+                .sort((a, b) => b.exp - a.exp);
+        }
+
+        function renderFHMatchups() {
+            const panel = document.getElementById('fhMatchupsPanel');
+            const content = document.getElementById('fhMatchupsContent');
+            if (!panel || !content) return;
+            if (!fhTableTeams || fhTableTeams.length === 0) { panel.classList.add('hidden'); content.innerHTML = ''; return; }
+            panel.classList.remove('hidden');
+            if (!globalFixtures || globalFixtures.length === 0) {
+                content.innerHTML = '<div class="no-data-message">No upcoming fixtures in the loaded data. Load OpenFootball data to preview expected first-half goals (fixture team names must match the FH table).</div>';
+                return;
+            }
+            const matchups = getUpcomingFHMatchups(globalFixtures, todayUK());
+            if (matchups.length === 0) {
+                content.innerHTML = '<div class="no-data-message">No upcoming fixtures where both teams appear in the FH table.</div>';
+                return;
+            }
+            const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+            content.innerHTML = matchups.slice(0, 30).map(f =>
+                `<div class="awd-team-card" style="padding:10px 15px; margin-bottom:8px;${f.hot ? ' border-left-color:#e83e8c;' : ''}"><div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;"><div><span class="awd-team-name" style="font-size:14px;">${esc(f.homeTeam)} vs ${esc(f.awayTeam)}</span> <strong style="color:#e83e8c;">${f.exp.toFixed(2)} exp. FH goals</strong>${f.hot ? ' <span class="highlight-badge" style="background:#e83e8c;">FH MATCH</span>' : ''}</div><div style="font-size:12px; color:#6c757d;">${esc(f.date)}${f.league ? ' &middot; ' + esc(f.league) : ''} &middot; host ${f.hVenue.toFixed(2)} / visitor ${f.aVenue.toFixed(2)} &middot; confidence ${f.confidence}</div></div></div>`
+            ).join('') + (matchups.length > 30 ? `<div class="no-data-message">+ ${matchups.length - 30} more (see CSV report)</div>` : '');
+        }
+
+        function clearFHData() {
+            fhTableData = { overall: [], home: [], away: [] };
+            fhTableTeams = [];
+            fhLeague = '';
+            fhSplitSource = { overall: 'none', home: 'none', away: 'none' };
+            const input = document.getElementById('fhRawInput');
+            const status = document.getElementById('fhTableStatus');
+            if (input) input.value = '';
+            if (status) { status.innerText = ''; status.style.color = ''; }
+            renderFHTable();
         }
 
         function buildFHFileSlug() {
@@ -2532,14 +2714,41 @@
             const lines = [];
             lines.push('Techmari Pro FP2 - First Half Entertaining Teams Report');
             lines.push(csvEscape('Generated: ' + new Date().toLocaleString('en-GB') + ' | League: ' + fhLeague + ' | Entertaining = 1.5+ first-half goals per match'));
+            lines.push(csvEscape('Split source - Overall: ' + fhSplitSource.overall + ' | Home: ' + fhSplitSource.home + ' | Away: ' + fhSplitSource.away + '. Derived splits = Overall minus the pasted venue table (or Home+Away when Overall is absent).'));
             lines.push('');
             lines.push('SECTION 1: FH ENTERTAINING TEAMS RANKING');
-            lines.push('Rank,Team,GP,FH GF,FH GA,FH GD,FH Goals/Match,FH GF/Match,FH GA/Match,FH Pts/Match,Entertaining');
+            lines.push('Rank,Team,GP,FH GF,FH GA,FH GD,FH Goals/Match,FH GF/Match,FH GA/Match,FH Pts/Match,Entertaining,Home GP,Home FH Goals/Match,Away GP,Away FH Goals/Match,Venue Profile');
             fhTableTeams.forEach((t, i) => {
-                lines.push([i + 1, t.team, t.gp, t.gf, t.ga, t.gd > 0 ? '+' + t.gd : t.gd, t.goalsPerMatch.toFixed(2), t.gfPerMatch.toFixed(2), t.gaPerMatch.toFixed(2), t.ptsPerMatch.toFixed(2), t.entertaining ? 'YES' : 'NO'].map(csvEscape).join(','));
+                lines.push([i + 1, t.team, t.gp, t.gf, t.ga, t.gd > 0 ? '+' + t.gd : t.gd, t.goalsPerMatch.toFixed(2), t.gfPerMatch.toFixed(2), t.gaPerMatch.toFixed(2), t.ptsPerMatch.toFixed(2), t.entertaining ? 'YES' : 'NO',
+                    t.homeGp !== null && t.homeGp !== undefined ? t.homeGp : '', t.homeGpm !== null && t.homeGpm !== undefined ? t.homeGpm.toFixed(2) : '',
+                    t.awayGp !== null && t.awayGp !== undefined ? t.awayGp : '', t.awayGpm !== null && t.awayGpm !== undefined ? t.awayGpm.toFixed(2) : '',
+                    t.profile || ''].map(csvEscape).join(','));
             });
             lines.push('');
             lines.push(csvEscape('Note: ranking uses only the pasted table totals. FH = first half (0-45 min).'));
+            let s = 2;
+            const pushTable = (title, rows) => {
+                lines.push('');
+                lines.push(title);
+                lines.push('Pos,Team,GP,W,D,L,GF,GA,GD,Pts,FH Goals/Match');
+                rows.slice().sort((a, b) => (a.pos || 999) - (b.pos || 999)).forEach(r => {
+                    lines.push([r.pos !== null && r.pos !== undefined ? r.pos : '', r.team, r.gp, r.w, r.d, r.l, r.gf, r.ga, r.gd > 0 ? '+' + r.gd : r.gd, r.pts, ((r.gf + r.ga) / r.gp).toFixed(2)].map(csvEscape).join(','));
+                });
+            };
+            if (fhTableData.home.length > 0) pushTable('SECTION ' + (s++) + ': FH HOME TABLE (PASTED)', fhTableData.home);
+            if (fhTableData.away.length > 0) pushTable('SECTION ' + (s++) + ': FH AWAY TABLE (PASTED)', fhTableData.away);
+            const matchups = getUpcomingFHMatchups(globalFixtures, todayUK());
+            lines.push('');
+            lines.push('SECTION ' + (s++) + ': UPCOMING FIXTURES - EXPECTED FIRST-HALF GOALS');
+            lines.push('Date,Round,League,Home Team,Away Team,Home FH Venue G/M,Away FH Venue G/M,Expected FH Goals,Confidence,Note');
+            if (matchups.length === 0) {
+                lines.push(csvEscape('None found. NOTE: upcoming fixtures are only captured from OpenFootball data, and both fixture teams must appear in the FH table(s).'));
+            } else {
+                matchups.forEach(f => {
+                    const note = f.hot ? 'FH goals candidate - Over 0.5 FH / FH BTTS lean' : '';
+                    lines.push([f.date, f.round, f.league, f.homeTeam, f.awayTeam, f.hVenue.toFixed(2), f.aVenue.toFixed(2), f.exp.toFixed(2), f.confidence, note].map(csvEscape).join(','));
+                });
+            }
             const csv = lines.join('\n') + '\n';
             const link = document.createElement('a');
             link.setAttribute('href', encodeURI('data:text/csv;charset=utf-8,' + csv));
