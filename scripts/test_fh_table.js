@@ -76,6 +76,10 @@ const els = {
   fhTableStatus: { innerText: '', style: {} },
   fhTableContent: { innerHTML: '' },
   fhExportBtn: { style: {} },
+  fhFixtureSelect: { value: '', innerHTML: '' },
+  fhHomeSelect: { value: '', innerHTML: '' },
+  fhAwaySelect: { value: '', innerHTML: '' },
+  fhSelectedMatchCard: { innerHTML: '' },
   fhMatchupsPanel: { hidden: true, classList: { add: () => { panelEl.hidden = true; }, remove: () => { panelEl.hidden = false; } } },
   fhMatchupsContent: { innerHTML: '' }
 };
@@ -131,13 +135,20 @@ ${extract('renderFHTable')}
 ${extract('expectedFHGoals')}
 ${extract('getUpcomingFHMatchups')}
 ${extract('renderFHMatchups')}
+${extract('escFh')}
+${extract('fhUpcomingFixtures')}
+${extract('refreshFHFixtureDropdowns')}
+${extract('onFHFixtureSelect')}
+${extract('onFHTeamSelect')}
+${extract('findFHFixtureFor')}
+${extract('renderFHSelectedMatch')}
 ${extract('clearFHData')}
 ${extract('buildFHFileSlug')}
 ${extract('exportFHReportCSV')}
 `;
 vm.createContext(sandbox);
 vm.runInContext(code, sandbox);
-vm.runInContext('var fhTableTeams = []; var fhLeague = ""; var fhTableData = { overall: [], home: [], away: [] }; var fhSplitSource = { overall: "none", home: "none", away: "none" };', sandbox);
+vm.runInContext('var fhTableTeams = []; var fhLeague = ""; var fhTableData = { overall: [], home: [], away: [] }; var fhSplitSource = { overall: "none", home: "none", away: "none" }; var fhFixtureOptions = [];', sandbox);
 
 let failed = 0;
 function check(label, cond, detail) {
@@ -292,6 +303,36 @@ check('matchups: host 2.43 / visitor 1.57', mus[0].hVenue.toFixed(2) === '2.43' 
 check('matchups: Almere v VVV exp 1.57 hot (>= 1.5)', mus[1].homeTeam === 'Almere City' && mus[1].exp.toFixed(2) === '1.57' && mus[1].hot === true, JSON.stringify(mus[1]));
 vm.runInContext('renderFHMatchups()', sandbox);
 check('matchups panel: card + FH MATCH + confidence', els.fhMatchupsContent.innerHTML.includes('2.00 exp. FH goals') && els.fhMatchupsContent.innerHTML.includes('FH MATCH') && els.fhMatchupsContent.innerHTML.includes('confidence HIGH'), els.fhMatchupsContent.innerHTML.slice(0, 200));
+
+// --- Test 10b: fixture + home/away dropdowns + selected-match card ---
+check('dropdowns: fixture select lists upcoming only', els.fhFixtureSelect.innerHTML.includes('Heracles Almelo vs FC Volendam') && els.fhFixtureSelect.innerHTML.includes('Almere City vs VVV-Venlo') && !els.fhFixtureSelect.innerHTML.includes('01/01/2000'), els.fhFixtureSelect.innerHTML);
+check('dropdowns: team selects have FH + fixture teams', els.fhHomeSelect.innerHTML.includes('<option value="Heracles Almelo">') && els.fhHomeSelect.innerHTML.includes('<option value="Real Madrid">') && els.fhHomeSelect.innerHTML.includes('<option value="FC Den Bosch">'), els.fhHomeSelect.innerHTML.slice(0, 300));
+els.fhHomeSelect.value = 'Almere City';
+vm.runInContext('refreshFHFixtureDropdowns()', sandbox);
+check('dropdowns: selection survives refresh', els.fhHomeSelect.value === 'Almere City', els.fhHomeSelect.value);
+els.fhHomeSelect.value = '';
+vm.runInContext('refreshFHFixtureDropdowns()', sandbox);
+els.fhFixtureSelect.value = '0';
+vm.runInContext('onFHFixtureSelect()', sandbox);
+check('fixture select: auto-fills home + away', els.fhHomeSelect.value === 'Heracles Almelo' && els.fhAwaySelect.value === 'FC Volendam', els.fhHomeSelect.value + ' / ' + els.fhAwaySelect.value);
+let card = els.fhSelectedMatchCard.innerHTML;
+check('card: 2.00 exp + HIGH + FH MATCH + fixture context', card.includes('<strong style="color:#e83e8c;">2.00</strong>') && card.includes('>HIGH<') && card.includes('FH MATCH') && card.includes('01/06/2027') && card.includes('R29'), card.slice(0, 400));
+check('card: host Home table rate 2.43, visitor Away table 1.57', card.includes('2.43 FH goals/match (Home table, 7 GP)') && card.includes('1.57 FH goals/match (Away table, 7 GP)'), card.slice(card.indexOf('Host'), card.indexOf('Host') + 300));
+check('card: FH HOT badges on both teams', (card.match(/FH HOT/g) || []).length === 2, (card.match(/FH HOT/g) || []).length);
+els.fhFixtureSelect.value = '';
+els.fhHomeSelect.value = 'Heracles Almelo';
+els.fhAwaySelect.value = 'FC Den Bosch';
+vm.runInContext('onFHTeamSelect()', sandbox);
+card = els.fhSelectedMatchCard.innerHTML;
+check('card: custom pairing Heracles v Den Bosch 1.91 MEDIUM', card.includes('1.91') && card.includes('>MEDIUM<') && card.includes('(custom pairing)') && card.includes('1.38 FH goals/match (Overall fallback, 13 GP)'), card.slice(0, 500));
+els.fhHomeSelect.value = 'Heracles Almelo';
+els.fhAwaySelect.value = 'Real Madrid';
+vm.runInContext('onFHTeamSelect()', sandbox);
+check('card: team outside FH tables -> hint', els.fhSelectedMatchCard.innerHTML.includes('Real Madrid is not in the FH table(s)'), els.fhSelectedMatchCard.innerHTML);
+els.fhHomeSelect.value = '';
+els.fhAwaySelect.value = '';
+vm.runInContext('onFHTeamSelect()', sandbox);
+check('card: empty selection -> cleared', els.fhSelectedMatchCard.innerHTML === '');
 
 // --- Test 11: combined CSV export ---
 linkAttrs = null;

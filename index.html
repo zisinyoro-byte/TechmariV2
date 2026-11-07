@@ -780,7 +780,7 @@
         </div>
         <div id="fhTableSection">
             <h3>First Half Entertaining Teams (FH Table)</h3>
-            <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Paste First Half standings tables (1-45 min) &mdash; <strong>Overall</strong>, <strong>Home</strong> and/or <strong>Away</strong>, each introduced by its own title line (e.g. <em>First Half table (1-45 min.)</em>, <em>First Half home table</em>, <em>First Half away table</em>). Columns: Pos, Team, GP, W, D, L, GF, GA, GD, Pts &mdash; tab- or multi-space separated. Teams are ranked by average FH goals per match (1.5+ = FH entertaining). Home/Away tables add per-venue FH rates and <strong>expected FH goals for upcoming fixtures</strong> (host uses its Home rate, visitor its Away rate). Missing splits are derived automatically (Overall&minus;Home / Overall&minus;Away, or Home+Away when Overall is absent).</p>
+            <p style="font-size:12px; color:#6c757d; margin-bottom: 15px;">Paste First Half standings tables (1-45 min) &mdash; <strong>Overall</strong>, <strong>Home</strong> and/or <strong>Away</strong>, each introduced by its own title line (e.g. <em>First Half table (1-45 min.)</em>, <em>First Half home table</em>, <em>First Half away table</em>). Columns: Pos, Team, GP, W, D, L, GF, GA, GD, Pts &mdash; tab- or multi-space separated. Teams are ranked by average FH goals per match (1.5+ = FH entertaining). Home/Away tables add per-venue FH rates and <strong>expected FH goals for upcoming fixtures</strong> (host uses its Home rate, visitor its Away rate). Missing splits are derived automatically (Overall&minus;Home / Overall&minus;Away, or Home+Away when Overall is absent). The fixture and team dropdowns below the table pull up any upcoming matchup (or custom pairing) on demand.</p>
             <div class="datasource-row">
                 <div class="control-group" style="flex:1;">
                     <label>League name (optional &mdash; used in report + filename)</label>
@@ -794,6 +794,23 @@
             <textarea id="fhRawInput" style="min-height:160px;" placeholder="Paste one or more First Half tables, e.g.&#10;First Half table (1-45 min.)&#10;GP  W  D  L  GF  GA  GD  Pts&#10;1  Heracles Almelo  14  10  3  1  23  6  +17  33&#10;2  FC Volendam  14  8  3  3  15  8  +7  27&#10;...&#10;First Half home table&#10;GP  W  D  L  GF  GA  GD  Pts&#10;1  Heracles Almelo  7  6  1  0  15  2  +13  19&#10;...&#10;First Half away table&#10;GP  W  D  L  GF  GA  GD  Pts&#10;1  ..."></textarea>
             <div id="fhTableStatus" style="font-size:12px; margin-top:8px;"></div>
             <div id="fhTableContent" style="margin-top:12px;"></div>
+            <div class="datasource-row" style="margin-top:16px;">
+                <div class="control-group" style="flex:2;">
+                    <label>Upcoming fixture (auto-fills home &amp; away)</label>
+                    <select id="fhFixtureSelect" onchange="onFHFixtureSelect()"></select>
+                </div>
+            </div>
+            <div class="datasource-row">
+                <div class="control-group" style="flex:1;">
+                    <label>Home team</label>
+                    <select id="fhHomeSelect" onchange="onFHTeamSelect()"></select>
+                </div>
+                <div class="control-group" style="flex:1;">
+                    <label>Away team</label>
+                    <select id="fhAwaySelect" onchange="onFHTeamSelect()"></select>
+                </div>
+            </div>
+            <div id="fhSelectedMatchCard" style="margin-top:12px;"></div>
             <div id="fhMatchupsPanel" class="hidden" style="margin-top: 18px;">
                 <div class="matchup-title">Upcoming: Expected First-Half Goals</div>
                 <div id="fhMatchupsContent"></div>
@@ -2318,6 +2335,7 @@
             lastAWDTeams = awdTeams.slice(0, 10);
             renderAttackWeakDefenseTeams(lastAWDTeams);
             renderEntertainerFixtures(lastAWDTeams);
+            refreshFHFixtureDropdowns();
         }
 
         function renderAttackWeakDefenseTeams(teams) {
@@ -2446,6 +2464,7 @@
         let fhLeague = '';
         let fhTableData = { overall: [], home: [], away: [] };   // last processed rows per variant
         let fhSplitSource = { overall: 'none', home: 'none', away: 'none' };  // pasted | derived | none
+        let fhFixtureOptions = [];   // upcoming fixtures backing the fixture dropdown
 
         function fhGpm(row) { return row && row.gp > 0 ? (row.gf + row.ga) / row.gp : null; }
 
@@ -2674,6 +2693,7 @@
         function renderFHMatchups() {
             const panel = document.getElementById('fhMatchupsPanel');
             const content = document.getElementById('fhMatchupsContent');
+            refreshFHFixtureDropdowns();
             if (!panel || !content) return;
             if (!fhTableTeams || fhTableTeams.length === 0) { panel.classList.add('hidden'); content.innerHTML = ''; return; }
             panel.classList.remove('hidden');
@@ -2690,6 +2710,88 @@
             content.innerHTML = matchups.slice(0, 30).map(f =>
                 `<div class="awd-team-card" style="padding:10px 15px; margin-bottom:8px;${f.hot ? ' border-left-color:#e83e8c;' : ''}"><div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;"><div><span class="awd-team-name" style="font-size:14px;">${esc(f.homeTeam)} vs ${esc(f.awayTeam)}</span> <strong style="color:#e83e8c;">${f.exp.toFixed(2)} exp. FH goals</strong>${f.hot ? ' <span class="highlight-badge" style="background:#e83e8c;">FH MATCH</span>' : ''}</div><div style="font-size:12px; color:#6c757d;">${esc(f.date)}${f.league ? ' &middot; ' + esc(f.league) : ''} &middot; host ${f.hVenue.toFixed(2)} / visitor ${f.aVenue.toFixed(2)} &middot; confidence ${f.confidence}</div></div></div>`
             ).join('') + (matchups.length > 30 ? `<div class="no-data-message">+ ${matchups.length - 30} more (see CSV report)</div>` : '');
+        }
+
+        // ---- FH matchup dropdowns + selected-match analysis card ----
+        function escFh(s) { return String(s === null || s === undefined ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+
+        function fhUpcomingFixtures() {
+            const from = parseDateForSort(todayUK());
+            return sortMatchesByDate((globalFixtures || []).filter(f => parseDateForSort(f.date) >= from));
+        }
+
+        // Rebuilds the fixture dropdown (upcoming only, date-sorted) and the Home/Away team dropdowns
+        // (FH table teams + upcoming fixture teams). Current selections survive a refresh when still valid.
+        function refreshFHFixtureDropdowns() {
+            const fxSel = document.getElementById('fhFixtureSelect');
+            const hSel = document.getElementById('fhHomeSelect');
+            const aSel = document.getElementById('fhAwaySelect');
+            if (!fxSel || !hSel || !aSel) return;
+            fhFixtureOptions = fhUpcomingFixtures();
+            const prevH = hSel.value, prevA = aSel.value;
+            fxSel.innerHTML = '<option value="">&mdash; Select an upcoming fixture &mdash;</option>' +
+                fhFixtureOptions.map((f, i) => `<option value="${i}">${escFh(f.date)}${f.round ? ' &middot; ' + escFh(f.round) : ''} &middot; ${escFh(f.homeTeam)} vs ${escFh(f.awayTeam)}</option>`).join('');
+            const names = new Set();
+            (fhTableTeams || []).forEach(t => names.add(t.team));
+            fhFixtureOptions.forEach(f => { names.add(f.homeTeam); names.add(f.awayTeam); });
+            const list = Array.from(names).sort((a, b) => a.localeCompare(b));
+            const teamOpts = list.map(n => `<option value="${escFh(n)}">${escFh(n)}</option>`).join('');
+            hSel.innerHTML = '<option value="">&mdash; Home team &mdash;</option>' + teamOpts;
+            aSel.innerHTML = '<option value="">&mdash; Away team &mdash;</option>' + teamOpts;
+            if (prevH && list.includes(prevH)) hSel.value = prevH;
+            if (prevA && list.includes(prevA)) aSel.value = prevA;
+            renderFHSelectedMatch();
+        }
+
+        function onFHFixtureSelect() {
+            const fxSel = document.getElementById('fhFixtureSelect');
+            const hSel = document.getElementById('fhHomeSelect');
+            const aSel = document.getElementById('fhAwaySelect');
+            const f = fhFixtureOptions[parseInt(fxSel && fxSel.value, 10)];
+            if (f && hSel && aSel) { hSel.value = f.homeTeam; aSel.value = f.awayTeam; }
+            renderFHSelectedMatch();
+        }
+
+        function onFHTeamSelect() {
+            renderFHSelectedMatch();
+        }
+
+        function findFHFixtureFor(homeTeam, awayTeam) {
+            return (globalFixtures || []).find(f => f.homeTeam === homeTeam && f.awayTeam === awayTeam) || null;
+        }
+
+        // Detailed card for the matchup picked via the dropdowns: host Home FH rate + visitor Away FH
+        // rate blended into expected FH goals, with confidence and FH MATCH flag at 1.5+.
+        function renderFHSelectedMatch() {
+            const card = document.getElementById('fhSelectedMatchCard');
+            if (!card) return;
+            const hSel = document.getElementById('fhHomeSelect');
+            const aSel = document.getElementById('fhAwaySelect');
+            const homeTeam = (hSel && hSel.value) || '';
+            const awayTeam = (aSel && aSel.value) || '';
+            if (!homeTeam || !awayTeam) { card.innerHTML = ''; return; }
+            const fx = findFHFixtureFor(homeTeam, awayTeam);
+            const e = expectedFHGoals(homeTeam, awayTeam);
+            const key = s => String(s || '').toLowerCase();
+            const hRow = (fhTableTeams || []).find(t => key(t.team) === key(homeTeam));
+            const aRow = (fhTableTeams || []).find(t => key(t.team) === key(awayTeam));
+            let html = '<div class="matchup-title">Selected Matchup &mdash; Expected First-Half Goals</div>';
+            if (!e) {
+                const missing = !hRow ? homeTeam : awayTeam;
+                html += '<div class="no-data-message">' + escFh(missing) + ' is not in the FH table(s). Paste/Process the FH table that contains this team.</div>';
+                card.innerHTML = html;
+                return;
+            }
+            const confColor = e.confidence === 'HIGH' ? '#28a745' : e.confidence === 'MEDIUM' ? '#fd7e14' : '#6c757d';
+            const hostRate = hRow.homeGpm !== null ? { v: hRow.homeGpm, gp: hRow.homeGp, src: 'Home table' } : { v: hRow.goalsPerMatch, gp: hRow.gp, src: 'Overall fallback' };
+            const visitRate = aRow.awayGpm !== null ? { v: aRow.awayGpm, gp: aRow.awayGp, src: 'Away table' } : { v: aRow.goalsPerMatch, gp: aRow.gp, src: 'Overall fallback' };
+            html += '<div class="awd-team-card" style="padding:12px 15px;">';
+            html += '<div style="font-size:15px;"><strong>' + escFh(homeTeam) + ' vs ' + escFh(awayTeam) + '</strong>' + (fx ? ' <span style="font-size:12px; color:#6c757d;">' + escFh(fx.date) + (fx.round ? ' &middot; ' + escFh(fx.round) : '') + (fx.league ? ' &middot; ' + escFh(fx.league) : '') + '</span>' : ' <span style="font-size:12px; color:#6c757d;">(custom pairing)</span>') + '</div>';
+            html += '<div style="margin:8px 0 10px; font-size:22px;"><strong style="color:#e83e8c;">' + e.exp.toFixed(2) + '</strong> <span style="font-size:13px; color:#6c757d;">expected FH goals</span> <span class="highlight-badge" style="background:' + confColor + ';">' + e.confidence + '</span>' + (e.exp >= 1.5 ? ' <span class="highlight-badge" style="background:#e83e8c;">FH MATCH</span> <span style="font-size:12px; color:#6c757d;">Over 0.5 FH / FH BTTS lean</span>' : '') + '</div>';
+            html += '<div style="font-size:13px; margin-bottom:4px;">Host: <strong>' + escFh(homeTeam) + '</strong> &mdash; ' + hostRate.v.toFixed(2) + ' FH goals/match (' + hostRate.src + ', ' + hostRate.gp + ' GP) &middot; overall ' + hRow.goalsPerMatch.toFixed(2) + (hRow.entertaining ? ' <span class="highlight-badge" style="background:#e83e8c;">FH HOT</span>' : '') + '</div>';
+            html += '<div style="font-size:13px;">Visitor: <strong>' + escFh(awayTeam) + '</strong> &mdash; ' + visitRate.v.toFixed(2) + ' FH goals/match (' + visitRate.src + ', ' + visitRate.gp + ' GP) &middot; overall ' + aRow.goalsPerMatch.toFixed(2) + (aRow.entertaining ? ' <span class="highlight-badge" style="background:#e83e8c;">FH HOT</span>' : '') + '</div>';
+            html += '</div>';
+            card.innerHTML = html;
         }
 
         function clearFHData() {
