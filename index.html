@@ -656,6 +656,16 @@
 
         <!-- Legacy Input (hidden by default) -->
         <div id="legacyInputPanel" class="hidden">
+            <div class="datasource-row">
+                <div class="control-group" style="flex:1;">
+                    <label>Auto-fetch from Soccerway &mdash; season results page URL</label>
+                    <input type="text" id="swUrlInput" placeholder="https://www.soccerway.com/scotland/league-two/results/">
+                </div>
+                <div class="control-group" style="flex: 0 0 auto;">
+                    <label>&nbsp;</label>
+                    <button class="btn-fetch" id="swFetchBtn" onclick="fetchSoccerwayResults()">Fetch Results</button>
+                </div>
+            </div>
             <textarea id="rawInput" placeholder="Paste text data here..."></textarea>
             <div class="actions">
                 <button onclick="processData()" class="btn-process">Process Text</button>
@@ -1045,7 +1055,7 @@
             'dutcheredivisie': 'N1', 'netherlandseredivisie': 'N1', 'eredivisie': 'N1',
             'netherlandseerstedivisie': 'N2', 'dutcheerstedivisie': 'N2', 'eerstedivisie': 'N2', 'keukenkampioendivisie': 'N2',
             'belgianfirstdiv': 'B1', 'belgianfirstdivision': 'B1', 'belgiumfirstdivisiona': 'B1', 'jupilerleague': 'B1',
-            'portugueseliga': 'P1', 'portugalprimeiraliga': 'P1', 'primeiraliga': 'P1', 'ligaportugal': 'P1',
+            'portugueseliga': 'P1', 'portugalprimeiraliga': 'P1', 'portugalliga': 'P1', 'primeiraliga': 'P1', 'ligaportugal': 'P1',
             'turkishsuperlig': 'T1', 'turkeysuperlig': 'T1', 'superlig': 'T1',
             'greeksuperleague': 'G1', 'greecesuperleague': 'G1', 'superleaguegreece': 'G1',
             'polishekstraklasa': 'PO', 'polandekstraklasa': 'PO', 'ekstraklasa': 'PO'
@@ -2705,6 +2715,144 @@
                 const savedSsUrl = localStorage.getItem('techmari_fh_ss_url');
                 const ssInput = document.getElementById('fhSsUrlInput');
                 if (savedSsUrl && ssInput && !ssInput.value) ssInput.value = savedSsUrl;
+            }
+        } catch (e) {}
+
+        // ---- Soccerway.com auto-fetch (league results page -> first paste box) ----
+        // The new Soccerway (LiveSport/Flashscore family) embeds every match of the
+        // season as a not-sign-delimited feed inside a <script> tag: events start at
+        // 'AA÷', fields are 'code÷value' joined by '¬'. Field meanings verified
+        // against football-data.co.uk results (60/60 identical scores, 2026-11):
+        //   ADE = kickoff epoch (seconds), ER = round name,
+        //   AE = home team, AF = away team,
+        //   AG = home FT goals, AH = away FT goals (present only when played).
+        // The page repeats a recent window of rounds in a second feed copy, so
+        // events are deduped by epoch + home + away (first occurrence wins).
+
+        function parseSoccerwayFeed(html) {
+            const events = [];
+            const seen = new Set();
+            const segs = String(html || '').split('AA\u00F7');
+            for (let i = 1; i < segs.length; i++) {
+                const f = {};
+                segs[i].split('\u00AC').forEach(p => {
+                    const idx = p.indexOf('\u00F7');
+                    if (idx > 0) f[p.slice(0, idx)] = p.slice(idx + 1);
+                });
+                const epoch = (f.ADE || '').trim();
+                const home = (f.AE || '').trim();
+                const away = (f.AF || '').trim();
+                if (!/^\d{9,10}$/.test(epoch) || !home || !away) continue;
+                const key = epoch + '|' + home + '|' + away;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                const hsRaw = (f.AG || '').trim(), asRaw = (f.AH || '').trim();
+                const played = /^\d{1,2}$/.test(hsRaw) && /^\d{1,2}$/.test(asRaw) && parseInt(hsRaw, 10) <= 30 && parseInt(asRaw, 10) <= 30;
+                events.push({ epoch: parseInt(epoch, 10), round: (f.ER || '').trim(), home: home, away: away,
+                              homeScore: played ? parseInt(hsRaw, 10) : null, awayScore: played ? parseInt(asRaw, 10) : null });
+            }
+            events.sort((a, b) => a.epoch - b.epoch);
+            return events;
+        }
+
+        // '/scotland/league-two/results/' -> 'Scotland - League Two' (canonLeagueTitle()
+        // then maps known leagues to the 'Country - League' canonical names). The
+        // season suffix on archive pages ('...-league-two-2025-2026') is stripped.
+        function swLeagueFromUrl(u) {
+            let path = '';
+            try { path = new URL(String(u || '')).pathname; } catch (e) { return ''; }
+            const parts = path.split('/').filter(Boolean);
+            if (parts.length < 2) return '';
+            const tc = s => s.split('-').map(w => w ? w.charAt(0).toUpperCase() + w.slice(1) : w).join(' ');
+            return tc(parts[0]) + ' - ' + tc(parts[1].replace(/-\d{4}(?:-\d{4})?$/, ''));
+        }
+
+        // Kickoff epoch (seconds) -> 'DD.MM.YYYY'. UTC getters reproduce the UK
+        // match dates exactly (validated 60/60 against football-data.co.uk).
+        function swDateFromEpoch(epoch) {
+            const d = new Date(epoch * 1000);
+            const p = n => String(n).padStart(2, '0');
+            return p(d.getUTCDate()) + '.' + p(d.getUTCMonth() + 1) + '.' + d.getUTCFullYear();
+        }
+
+        // Decoded feed -> paste-box text: league line, 'Round N' headers, then per
+        // match the duplicate-name block processData() already parses
+        // (home, home, away, away, hScore, aScore, date). Unplayed fixtures are
+        // counted and skipped — the paste box is for played results only.
+        function buildSoccerwayPaste(html, pageUrl) {
+            const events = parseSoccerwayFeed(html);
+            const played = events.filter(e => e.homeScore !== null);
+            const base = { league: canonLeagueTitle(swLeagueFromUrl(pageUrl)) || '', results: 0, rounds: 0, fixtures: events.length - played.length };
+            if (played.length === 0) {
+                return { ...base, ok: false, text: '', error: 'No played matches found on that page. Use a Soccerway RESULTS url (\u2026/results/), not a fixtures or standings page. If the site blocked the fetch, open the page in your browser and paste the results manually below.' };
+            }
+            const lines = [base.league || 'Unknown'];
+            let curRound = null;
+            played.forEach(e => {
+                if (e.round && e.round !== curRound) { lines.push(e.round); curRound = e.round; }
+                lines.push(e.home, e.home, e.away, e.away, String(e.homeScore), String(e.awayScore), swDateFromEpoch(e.epoch));
+            });
+            return { ...base, ok: true, text: lines.join('\n'), results: played.length, rounds: new Set(played.map(e => e.round).filter(Boolean)).size };
+        }
+
+        // Fetch button: pulls the league results page through the serverless proxy
+        // (/api/soccerway.js), decodes the embedded feed into paste text and
+        // processes it exactly like a manual paste into the first paste box.
+        async function fetchSoccerwayResults() {
+            const btn = document.getElementById('swFetchBtn');
+            const statusArea = document.getElementById('statusArea');
+            const urlInput = document.getElementById('swUrlInput');
+            const resetBtn = () => { if (btn) { btn.disabled = false; btn.textContent = 'Fetch Results'; } };
+            const fail = msg => { statusArea.innerText = msg; statusArea.style.color = '#dc3545'; resetBtn(); };
+            const rawTarget = ((urlInput && urlInput.value) || '').trim();
+            if (!rawTarget) {
+                fail('Paste a Soccerway results page URL first, e.g. https://www.soccerway.com/scotland/league-two/results/');
+                return;
+            }
+            let target = rawTarget;
+            if (!/^https?:\/\//i.test(target)) {
+                if (!/soccerway\.com/i.test(target)) { fail('That does not look like a soccerway.com URL.'); return; }
+                target = 'https://' + target.replace(/^\/+/, '');
+            }
+            let parsed;
+            try { parsed = new URL(target); } catch (e) { fail('Invalid URL.'); return; }
+            if (!/(^|\.)soccerway\.com$/i.test(parsed.hostname)) { fail('Only soccerway.com URLs are supported.'); return; }
+            if (btn) { btn.disabled = true; btn.textContent = 'Fetching\u2026'; }
+            statusArea.innerText = 'Fetching results from Soccerway\u2026';
+            statusArea.style.color = '#6c757d';
+            try {
+                const resp = await fetch('/api/soccerway.js?url=' + encodeURIComponent(parsed.href));
+                if (!resp.ok) {
+                    let detail = '';
+                    try { const j = await resp.json(); if (j && j.detail) detail = ' ' + j.detail; } catch (e) {}
+                    fail('Fetch failed (HTTP ' + resp.status + ').' + detail);
+                    return;
+                }
+                const html = await resp.text();
+                const built = buildSoccerwayPaste(html, parsed.href);
+                if (!built.ok) { fail('Soccerway fetch: ' + built.error); return; }
+                const ta = document.getElementById('rawInput');
+                if (ta) ta.value = built.text;
+                try { if (typeof localStorage !== 'undefined') localStorage.setItem('techmari_sw_url', parsed.href); } catch (e) {}
+                processData();
+                if (statusArea && globalMatches.length > 0) {
+                    statusArea.innerText = 'Fetched from Soccerway: ' + built.results + ' result(s) in ' + built.rounds
+                        + ' round(s)' + (built.fixtures ? ', ' + built.fixtures + ' upcoming fixture(s) skipped' : '')
+                        + ' \u2014 ' + built.league + '. ' + statusArea.innerText;
+                    statusArea.style.color = '#28a745';
+                }
+                resetBtn();
+            } catch (e) {
+                fail('Fetch error: ' + e.message + ' \u2014 open the results page in your browser and paste the results manually instead.');
+            }
+        }
+
+        // Prefill the Soccerway URL box with the last successful fetch.
+        try {
+            if (typeof localStorage !== 'undefined') {
+                const savedSwUrl = localStorage.getItem('techmari_sw_url');
+                const swInput = document.getElementById('swUrlInput');
+                if (savedSwUrl && swInput && !swInput.value) swInput.value = savedSwUrl;
             }
         } catch (e) {}
 
