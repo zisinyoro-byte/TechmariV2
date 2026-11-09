@@ -815,6 +815,7 @@
                 <div class="control-group" style="flex: 0 0 auto;">
                     <label>&nbsp;</label>
                     <button class="btn-fetch" onclick="processFHTable()">Process FH Table</button>
+                    <button onclick="clearFHData()" class="btn-fetch" style="margin-left:8px; background:#6c757d;">Clear FH Data</button>
                 </div>
             </div>
             <textarea id="fhRawInput" style="min-height:160px;" placeholder="Paste one or more First Half tables, e.g.&#10;First Half table (1-45 min.)&#10;GP  W  D  L  GF  GA  GD  Pts&#10;1  Heracles Almelo  14  10  3  1  23  6  +17  33&#10;2  FC Volendam  14  8  3  3  15  8  +7  27&#10;...&#10;First Half home table&#10;GP  W  D  L  GF  GA  GD  Pts&#10;1  Heracles Almelo  7  6  1  0  15  2  +13  19&#10;...&#10;First Half away table&#10;GP  W  D  L  GF  GA  GD  Pts&#10;1  ..."></textarea>
@@ -843,7 +844,6 @@
             </div>
             <div style="margin-top: 14px; text-align: center;">
                 <button id="fhExportBtn" onclick="exportFHReportCSV()" class="btn-export" style="display:none;">Download FH Entertaining Teams Report (CSV)</button>
-                <button onclick="clearFHData()" class="btn-fetch" style="margin-left:8px; background:#6c757d;">Clear FH Data</button>
             </div>
         </div>
         <div id="insightsSection" class="hidden">

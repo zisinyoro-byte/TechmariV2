@@ -184,6 +184,19 @@ function check(label, cond, detail) {
   if (!cond) failed++;
 }
 
+// --- Test 0: Clear FH Data button placement (Task 19: next to Process FH Table) ---
+{
+  const page = new JSDOM(html);
+  const doc = page.window.document;
+  const clearBtns = [...doc.querySelectorAll('button')].filter(b => b.textContent.trim() === 'Clear FH Data');
+  check('exactly one Clear FH Data button', clearBtns.length === 1, 'found ' + clearBtns.length);
+  const clearBtn = clearBtns[0];
+  const procBtn = [...doc.querySelectorAll('button')].find(b => b.getAttribute('onclick') === 'processFHTable()');
+  check('Clear sits immediately next to Process FH Table', !!clearBtn && !!procBtn && clearBtn.previousElementSibling === procBtn);
+  const exportBtn = doc.getElementById('fhExportBtn');
+  check('Clear removed from the CSV export row', !!exportBtn && !!clearBtn && clearBtn.parentElement !== exportBtn.parentElement);
+}
+
 // --- Test 1: row parser ---
 check('header row -> HEADER', vm.runInContext(`parseFHTableRow('GP\tW\tD\tL\tGF\tGA\tGD\tPts')`, sandbox) === 'HEADER');
 check('title line -> null', vm.runInContext(`parseFHTableRow('First Half table (1-45 min.)')`, sandbox) === null);
