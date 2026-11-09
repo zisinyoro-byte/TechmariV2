@@ -681,6 +681,12 @@
         <div id="predictionSection" class="hidden">
             <h3>Step 2: Statistical Prediction Engine</h3>
             <p style="font-size:12px; color:#6c757d;">Select teams to calculate Expected Goals (xG), run Monte Carlo simulations, and analyze deviation/regression.</p>
+            <div class="prediction-controls" style="margin-bottom: 10px;">
+                <div class="control-group">
+                    <label>Upcoming fixtures <span style="font-weight:normal; color:#6c757d;">(from the Soccerway fetch &mdash; picking one fills the team dropdowns below and predicts instantly; those stay as your manual fallback)</span></label>
+                    <select id="swFixtureSelect" onchange="onSwFixtureSelect()"></select>
+                </div>
+            </div>
             <div class="prediction-controls">
                 <div class="control-group">
                     <label>Home Team</label>
@@ -997,6 +1003,8 @@
     <script>
         let globalMatches = [];
         let globalFixtures = [];   // upcoming fixtures (no final score yet) — captured from OpenFootball loads; powers the Entertaining Teams report
+        let globalSwFixtures = [];        // upcoming fixtures captured by the Soccerway fetch — powers the Step 2 fixture dropdown (team dropdowns stay as manual fallback)
+        let globalSwFixturesLeague = '';
         let teamStats = {};
         let currentDeviationPeriod = 'season';
         let lastSelectedHomeTeam = null;
@@ -1816,6 +1824,7 @@
             tableBody.innerHTML = "";
             globalMatches = [];
             globalFixtures = [];
+            clearSwFixtures();
             const lines = rawInput.split('\n').map(l => l.trim()).filter(l => l.length > 0);
             let currentLeague = "Unknown";
             let currentRound = "Unknown";
@@ -2775,6 +2784,86 @@
             return p(d.getUTCDate()) + '.' + p(d.getUTCMonth() + 1) + '.' + d.getUTCFullYear();
         }
 
+        // Kickoff epoch (seconds) -> 'HH:MM' UK time (Europe/London, so summer
+        // kickoffs show BST correctly; falls back to UTC getters if Intl
+        // timezone data is unavailable).
+        function swTimeFromEpoch(epoch) {
+            try { return new Date(epoch * 1000).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' }); }
+            catch (e) {
+                const d = new Date(epoch * 1000);
+                const p = n => String(n).padStart(2, '0');
+                return p(d.getUTCHours()) + ':' + p(d.getUTCMinutes());
+            }
+        }
+
+        // Unplayed events -> upcoming-fixture list for the Step 2 dropdown.
+        // parseSoccerwayFeed() already sorts by epoch, so the list is chronological.
+        function soccerwayFixturesFromFeed(html, league) {
+            return parseSoccerwayFeed(html)
+                .filter(e => e.homeScore === null)
+                .map(e => ({ league: league || '', date: swDateFromEpoch(e.epoch), time: swTimeFromEpoch(e.epoch),
+                             round: e.round || '', homeTeam: e.home, awayTeam: e.away }));
+        }
+
+        function clearSwFixtures() {
+            globalSwFixtures = [];
+            globalSwFixturesLeague = '';
+            refreshSwFixtureDropdown();
+        }
+
+        function setSwFixtures(fixtures, league) {
+            globalSwFixtures = Array.isArray(fixtures) ? fixtures : [];
+            globalSwFixturesLeague = league || '';
+            refreshSwFixtureDropdown();
+        }
+
+        // Populates the Step 2 'Upcoming fixtures' dropdown. The existing Home/Away
+        // team dropdowns are deliberately untouched — they remain the manual fallback.
+        function refreshSwFixtureDropdown() {
+            const sel = document.getElementById('swFixtureSelect');
+            if (!sel) return;
+            sel.innerHTML = '';
+            const ph = document.createElement('option');
+            ph.value = '';
+            ph.text = globalSwFixtures.length === 0
+                ? 'No upcoming fixtures loaded (fetch a Soccerway results page to fill this)'
+                : 'Upcoming fixtures: ' + globalSwFixtures.length + ' loaded (from Soccerway) — pick one to auto-predict';
+            sel.add(ph);
+            globalSwFixtures.forEach((f, i) => {
+                const o = document.createElement('option');
+                o.value = String(i);
+                o.text = (f.round ? f.round + ' \u00B7 ' : '') + f.date + (f.time ? ' ' + f.time + ' UK' : '') + ' \u00B7 ' + f.homeTeam + ' vs ' + f.awayTeam;
+                sel.add(o);
+            });
+            sel.value = '';
+        }
+
+        // Selecting an upcoming fixture fills the existing Home/Away dropdowns and
+        // runs the prediction — identical to picking both teams manually and
+        // clicking Predict. Falls back to a clear error when a fixture team is not
+        // in the processed data (e.g. results pasted for a different league).
+        function onSwFixtureSelect() {
+            const sel = document.getElementById('swFixtureSelect');
+            if (!sel || sel.value === '') return;
+            const f = globalSwFixtures[parseInt(sel.value, 10)];
+            if (!f) return;
+            const homeSel = document.getElementById('homeTeamSelect');
+            const awaySel = document.getElementById('awayTeamSelect');
+            const hasOpt = (s, name) => Array.from((s && s.options) || []).some(o => o.value === name);
+            if (!hasOpt(homeSel, f.homeTeam) || !hasOpt(awaySel, f.awayTeam)) {
+                const st = document.getElementById('statusArea');
+                if (st) { st.innerText = 'Fixture teams (' + f.homeTeam + ' / ' + f.awayTeam + ') are not in the processed data. Process this league\u2019s results first, or pick teams manually below.'; st.style.color = '#dc3545'; }
+                sel.value = '';
+                return;
+            }
+            homeSel.value = f.homeTeam;
+            awaySel.value = f.awayTeam;
+            if (typeof onTeamSelectChange === 'function') onTeamSelectChange();
+            runPrediction();
+            const st = document.getElementById('statusArea');
+            if (st) { st.innerText = 'Predicting upcoming fixture: ' + f.homeTeam + ' vs ' + f.awayTeam + (f.round ? ' (' + f.round + (f.date ? ', ' + f.date + (f.time ? ' ' + f.time + ' UK' : '') : '') + ')' : '') + ' — selected from the fixture dropdown.'; st.style.color = '#28a745'; }
+        }
+
         // Decoded feed -> paste-box text: league line, 'Round N' headers, then per
         // match the duplicate-name block processData() already parses
         // (home, home, away, away, hScore, aScore, date). Unplayed fixtures are
@@ -2835,10 +2924,11 @@
                 if (ta) ta.value = built.text;
                 try { if (typeof localStorage !== 'undefined') localStorage.setItem('techmari_sw_url', parsed.href); } catch (e) {}
                 processData();
+                setSwFixtures(soccerwayFixturesFromFeed(html, built.league), built.league);
                 if (statusArea && globalMatches.length > 0) {
                     statusArea.innerText = 'Fetched from Soccerway: ' + built.results + ' result(s) in ' + built.rounds
-                        + ' round(s)' + (built.fixtures ? ', ' + built.fixtures + ' upcoming fixture(s) skipped' : '')
-                        + ' \u2014 ' + built.league + '. ' + statusArea.innerText;
+                        + ' round(s) \u2014 ' + built.league + '. ' + globalSwFixtures.length + ' upcoming fixture(s) listed in the Step 2 dropdown. '
+                        + statusArea.innerText;
                     statusArea.style.color = '#28a745';
                 }
                 resetBtn();
@@ -2855,6 +2945,9 @@
                 if (savedSwUrl && swInput && !swInput.value) swInput.value = savedSwUrl;
             }
         } catch (e) {}
+
+        // Start with an empty (placeholder) fixture dropdown.
+        refreshSwFixtureDropdown();
 
         // homeRows/awayRows optional: raw (or derived) venue rows keyed by team name.
         function rankFHTeams(teams, homeRows, awayRows) {

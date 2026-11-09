@@ -43,7 +43,10 @@ const SCHED_ONLY_HTML = ['<html><script>', E_S1, E_S2, '</script></html>'].join(
 const elements = {};
 function el(id) {
   if (!elements[id]) {
-    elements[id] = { id: id, value: '', innerText: '', innerHTML: '', textContent: '', disabled: false, style: {}, classList: { remove() {}, add() {} } };
+    const e = { id: id, value: '', innerText: '', textContent: '', disabled: false, style: {}, classList: { remove() {}, add() {} }, options: [], _html: '' };
+    Object.defineProperty(e, 'innerHTML', { get() { return e._html; }, set(v) { e._html = v; if (v === '') e.options = []; } });
+    e.add = (o) => { e.options.push(o); };
+    elements[id] = e;
   }
   return elements[id];
 }
@@ -66,6 +69,8 @@ const sandbox = {
 };
 sandbox.globalMatches = [];
 sandbox.globalFixtures = [];
+sandbox.globalSwFixtures = [];
+sandbox.globalSwFixturesLeague = '';
 
 function extract(name) {
   const asyncStart = js.indexOf(`async function ${name}(`);
@@ -93,6 +98,12 @@ ${extract('isValidDate')}
 ${extract('parseSoccerwayFeed')}
 ${extract('swLeagueFromUrl')}
 ${extract('swDateFromEpoch')}
+${extract('swTimeFromEpoch')}
+${extract('soccerwayFixturesFromFeed')}
+${extract('clearSwFixtures')}
+${extract('setSwFixtures')}
+${extract('refreshSwFixtureDropdown')}
+${extract('onSwFixtureSelect')}
 ${extract('buildSoccerwayPaste')}
 ${extract('fetchSoccerwayResults')}
 ${extract('processData')}
@@ -138,6 +149,8 @@ check('unknown league kept readable', run(`canonLeagueTitle(swLeagueFromUrl('htt
 check('1793458800 -> 31.10.2026', run(`swDateFromEpoch(1793458800)`) === '31.10.2026', run(`swDateFromEpoch(1793458800)`));
 check('1794063600 -> 07.11.2026', run(`swDateFromEpoch(1794063600)`) === '07.11.2026', run(`swDateFromEpoch(1794063600)`));
 check('1794668400 -> 14.11.2026', run(`swDateFromEpoch(1794668400)`) === '14.11.2026', run(`swDateFromEpoch(1794668400)`));
+check('1794668400 -> 15:00 UK (GMT)', run(`swTimeFromEpoch(1794668400)`) === '15:00', run(`swTimeFromEpoch(1794668400)`));
+check('1786802400 -> 15:00 UK (BST; raw UTC getters would give 14:00)', run(`swTimeFromEpoch(1786802400)`) === '15:00', run(`swTimeFromEpoch(1786802400)`));
 
 // --- Test 4: paste-text generation ---
 const built = run(`buildSoccerwayPaste(${JSON.stringify(SAMPLE_HTML)}, 'https://www.soccerway.com/scotland/league-two/results/')`);
@@ -164,6 +177,7 @@ check('empty html -> fixtures counted 0', empty.fixtures === 0, `${empty.fixture
 
 // --- Test 6: END-TO-END — generated paste parses through processData() ---
 run(`globalMatches = []; globalFixtures = [];`);
+run(`setSwFixtures(soccerwayFixturesFromFeed(${JSON.stringify(SAMPLE_HTML)}, 'Scotland - League 2'), 'Scotland - League 2')`);
 el('rawInput').value = built.text;
 run('processData()');
 const gm = run('globalMatches');
@@ -173,6 +187,7 @@ check('match 2: Round 13, Annan 1-2 Kelty Hearts, 07.11.2026', gm[1] && gm[1].ro
 check('match 3: Round 13, Clyde 3-2 Spartans, 07.11.2026', gm[2] && gm[2].round === 'Round 13' && gm[2].homeTeam === 'Clyde' && gm[2].awayTeam === 'Spartans' && gm[2].homeScore === 3 && gm[2].awayScore === 2 && gm[2].date === '07.11.2026', JSON.stringify(gm[2]));
 check('all matches carry canonical league name', gm.every(x => x.league === 'Scotland - League 2'), JSON.stringify(gm.map(x => x.league)));
 check('no fixtures captured from paste', run('globalFixtures').length === 0, `${run('globalFixtures').length}`);
+check('processData clears captured Soccerway fixtures', run('globalSwFixtures.length') === 0 && el('swFixtureSelect').options.length === 1 && el('swFixtureSelect').options[0].text.includes('No upcoming fixtures loaded'), `${run('globalSwFixtures').length} | ${el('swFixtureSelect').options.map(o => o.text).join(' | ')}`);
 
 // --- Test 7: fetch flow (mocked proxy) — success ---
 run(`globalMatches = []; globalFixtures = [];`);
@@ -186,7 +201,9 @@ el('statusArea').innerText = '';
   await run('fetchSoccerwayResults()');
   check('proxy URL passed as /api/soccerway.js?url=<encoded>', fetchArg === '/api/soccerway.js?url=' + encodeURIComponent('https://www.soccerway.com/scotland/league-two/results/'), String(fetchArg));
   check('textarea filled with generated paste', el('rawInput').value === expectedText, el('rawInput').value.slice(0, 60));
-  check('status prefixed with fetch summary + league', el('statusArea').innerText.startsWith('Fetched from Soccerway: 3 result(s) in 2 round(s), 3 upcoming fixture(s) skipped — Scotland - League 2.'), el('statusArea').innerText);
+  check('status prefixed with fetch summary + league', el('statusArea').innerText.startsWith('Fetched from Soccerway: 3 result(s) in 2 round(s) — Scotland - League 2. 3 upcoming fixture(s) listed in the Step 2 dropdown.'), el('statusArea').innerText);
+  check('fetch captured 3 upcoming fixtures', run('globalSwFixtures.length') === 3, `${run('globalSwFixtures.length')}`);
+  check('fixture dropdown refilled after fetch (placeholder + 3)', el('swFixtureSelect').options.length === 4 && el('swFixtureSelect').options[0].text.includes('Upcoming fixtures: 3 loaded'), el('swFixtureSelect').options.map(o => o.text).join(' | '));
   check('status green', el('statusArea').style.color === '#28a745', el('statusArea').style.color);
   check('processData ran (3 matches)', run('globalMatches').length === 3, `${run('globalMatches').length}`);
   check('button restored', el('swFetchBtn').textContent === 'Fetch Results' && el('swFetchBtn').disabled === false, `${el('swFetchBtn').textContent}/${el('swFetchBtn').disabled}`);
@@ -219,6 +236,47 @@ el('statusArea').innerText = '';
   el('statusArea').innerText = '';
   await run('fetchSoccerwayResults()');
   check('foreign domain rejected (no network call)', el('statusArea').innerText.includes('Only soccerway.com URLs are supported.') && fetchArg === '/api/soccerway.js?url=' + encodeURIComponent('https://www.soccerway.com/scotland/league-two/results/'), el('statusArea').innerText + ' | ' + String(fetchArg));
+
+  // --- Test 11: captured fixture list + select -> auto-predict flow ---
+  run(`setSwFixtures(soccerwayFixturesFromFeed(${JSON.stringify(SAMPLE_HTML)}, 'Scotland - League 2'), 'Scotland - League 2')`);
+  const fx3 = run('JSON.parse(JSON.stringify(globalSwFixtures))');
+  check('fixtures chronological: 07.11 then 2x 14.11', fx3.length === 3 && fx3[0].date === '07.11.2026' && fx3[1].date === '14.11.2026' && fx3[2].date === '14.11.2026', JSON.stringify(fx3.map(f => f.date)));
+  check('fixture fields: league/date/time/round/teams', fx3[1].league === 'Scotland - League 2' && fx3[1].time === '15:00' && fx3[1].round === 'Round 14' && fx3[1].homeTeam === 'Dumbarton' && fx3[1].awayTeam === 'Annan', JSON.stringify(fx3[1]));
+  check('roundless fixture kept with empty round', fx3[0].round === '' && fx3[0].homeTeam === 'Weird FC', JSON.stringify(fx3[0]));
+  check('dropdown option text: round · date time UK · teams', el('swFixtureSelect').options[2].text === 'Round 14 \u00b7 14.11.2026 15:00 UK \u00b7 Dumbarton vs Annan', el('swFixtureSelect').options[2].text);
+  check('dropdown placeholder text when loaded', el('swFixtureSelect').options[0].text === 'Upcoming fixtures: 3 loaded (from Soccerway) \u2014 pick one to auto-predict', el('swFixtureSelect').options[0].text);
+
+  run('var onTeamSelectChangeCalls = []; function onTeamSelectChange(){ onTeamSelectChangeCalls.push(1); }');
+  run('var runPredictionCalls = []; function runPrediction(){ runPredictionCalls.push(1); }');
+  const teamOpts = ['Dumbarton', 'Annan', 'Elgin City', 'Spartans', 'Kelty Hearts', 'Clyde', 'Stranraer'].map(t => ({ value: t, text: t }));
+  el('homeTeamSelect').options = teamOpts.slice();
+  el('awayTeamSelect').options = teamOpts.slice();
+  el('swFixtureSelect').value = '1';  // Dumbarton vs Annan
+  el('statusArea').innerText = '';
+  run('onSwFixtureSelect()');
+  check('fixture select fills Home dropdown', el('homeTeamSelect').value === 'Dumbarton', el('homeTeamSelect').value);
+  check('fixture select fills Away dropdown', el('awayTeamSelect').value === 'Annan', el('awayTeamSelect').value);
+  check('prediction auto-runs like the Predict button', run('runPredictionCalls.length') === 1, `${run('runPredictionCalls.length')}`);
+  check('selected-team stats card refresh triggered', run('onTeamSelectChangeCalls.length') === 1, `${run('onTeamSelectChangeCalls.length')}`);
+  check('green confirmation with round + kickoff', el('statusArea').innerText.startsWith('Predicting upcoming fixture: Dumbarton vs Annan (Round 14, 14.11.2026 15:00 UK)') && el('statusArea').style.color === '#28a745', el('statusArea').innerText);
+  check('team dropdowns themselves untouched (fallback intact)', el('homeTeamSelect').options.length === 7 && el('awayTeamSelect').options.length === 7, `${el('homeTeamSelect').options.length}/${el('awayTeamSelect').options.length}`);
+
+  // fixture team missing from processed data -> red guidance, no predict
+  el('swFixtureSelect').value = '0';  // Weird FC vs Odd United — not in team dropdowns
+  el('statusArea').innerText = '';
+  run('onSwFixtureSelect()');
+  check('missing fixture team -> red guidance, no predict', run('runPredictionCalls.length') === 1 && el('statusArea').style.color === '#dc3545' && el('statusArea').innerText.includes('Weird FC / Odd United'), el('statusArea').innerText);
+  check('fixture dropdown reset on miss', el('swFixtureSelect').value === '', el('swFixtureSelect').value);
+
+  // placeholder selection -> no-op
+  el('statusArea').innerText = '';
+  el('swFixtureSelect').value = '';
+  run('onSwFixtureSelect()');
+  check('placeholder selection is a no-op', el('statusArea').innerText === '' && run('runPredictionCalls.length') === 1, el('statusArea').innerText);
+
+  // clearSwFixtures -> placeholder-only state
+  run('clearSwFixtures()');
+  check('clearSwFixtures -> placeholder only', run('globalSwFixtures.length') === 0 && el('swFixtureSelect').options.length === 1 && el('swFixtureSelect').options[0].text.includes('No upcoming fixtures loaded'), el('swFixtureSelect').options.map(o => o.text).join(' | '));
 
   console.log(failed === 0 ? '\nALL TESTS PASSED' : `\n${failed} TEST(S) FAILED`);
   process.exit(failed === 0 ? 0 : 1);
