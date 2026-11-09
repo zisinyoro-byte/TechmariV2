@@ -83,7 +83,8 @@ const els = {
   fhMatchupsPanel: { hidden: true, classList: { add: () => { panelEl.hidden = true; }, remove: () => { panelEl.hidden = false; } } },
   fhMatchupsContent: { innerHTML: '' },
   fhSsUrlInput: { value: '' },
-  fhSsFetchBtn: { disabled: false, textContent: 'Fetch FH Tables' }
+  fhSsFetchBtn: { disabled: false, textContent: 'Fetch FH Tables' },
+  swUrlInput: { value: '' }
 };
 const sandbox = {
   console,
@@ -109,7 +110,8 @@ sandbox.URL = URL;
 sandbox.localStorage = {
   store: {},
   getItem(k) { return Object.prototype.hasOwnProperty.call(this.store, k) ? this.store[k] : null; },
-  setItem(k, v) { this.store[k] = String(v); }
+  setItem(k, v) { this.store[k] = String(v); },
+  removeItem(k) { delete this.store[k]; }
 };
 
 function extract(name) {
@@ -491,6 +493,20 @@ ${htmlTable(awayRowsHtml)}
   sandbox.fetch = async (u) => { fetchCalls.push(u); return { ok: true, status: 200, headers: { get: () => '' }, text: async () => SS_HTML, json: async () => ({}) }; };
   await vm.runInContext('fetchSoccerstatsFH()', sandbox);
   check('ss fetch: foreign domain rejected, no fetch', fetchCalls.length === 0 && els.fhTableStatus.innerText.includes('Only soccerstats.com URLs are supported.'), els.fhTableStatus.innerText);
+
+  // Clear FH Data also wipes both URL fields + their saved localStorage URLs
+  els.fhRawInput.value = 'SENTINEL2';
+  els.fhSsUrlInput.value = SS_URL;
+  els.swUrlInput.value = 'https://www.soccerway.com/scotland/league-two/results/';
+  sandbox.localStorage.setItem('techmari_fh_ss_url', SS_URL);
+  sandbox.localStorage.setItem('techmari_sw_url', 'https://www.soccerway.com/scotland/league-two/results/');
+  vm.runInContext('clearFHData()', sandbox);
+  check('clear: SoccerSTATS URL field emptied', els.fhSsUrlInput.value === '', els.fhSsUrlInput.value);
+  check('clear: Soccerway URL field emptied', els.swUrlInput.value === '', els.swUrlInput.value);
+  check('clear: saved SoccerSTATS URL removed', sandbox.localStorage.getItem('techmari_fh_ss_url') === null, sandbox.localStorage.getItem('techmari_fh_ss_url'));
+  check('clear: saved Soccerway URL removed', sandbox.localStorage.getItem('techmari_sw_url') === null, sandbox.localStorage.getItem('techmari_sw_url'));
+  check('clear: confirmation mentions URL fields', els.fhTableStatus.innerText.includes('URL fields reset'), els.fhTableStatus.innerText);
+  check('clear: paste box emptied too', els.fhRawInput.value === '');
 })().then(() => {
   console.log(failed === 0 ? '\nALL TESTS PASS' : `\n${failed} TEST(S) FAILED`);
   process.exit(failed === 0 ? 0 : 1);

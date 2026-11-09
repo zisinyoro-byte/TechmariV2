@@ -3105,7 +3105,14 @@
             const input = document.getElementById('fhRawInput');
             const status = document.getElementById('fhTableStatus');
             if (input) input.value = '';
-            if (status) { status.innerText = ''; status.style.color = ''; }
+            // Also wipe the auto-fetch URL fields (SoccerSTATS + Soccerway) and the
+            // remembered URLs, so they do not re-fill from localStorage on reload.
+            const ssUrlInput = document.getElementById('fhSsUrlInput');
+            const swUrlInput = document.getElementById('swUrlInput');
+            if (ssUrlInput) ssUrlInput.value = '';
+            if (swUrlInput) swUrlInput.value = '';
+            try { if (typeof localStorage !== 'undefined') { localStorage.removeItem('techmari_fh_ss_url'); localStorage.removeItem('techmari_sw_url'); } } catch (e) {}
+            if (status) { status.innerText = 'FH data cleared — paste box, tables and both URL fields reset.'; status.style.color = '#6c757d'; }
             renderFHTable();
         }
 
