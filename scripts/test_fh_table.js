@@ -164,6 +164,11 @@ ${extract('clearFHData')}
 ${extract('buildFHFileSlug')}
 ${extract('exportFHReportCSV')}
 ${extract('soccerstatsTableLines')}
+${extract('findSectionTable')}
+${extract('parseSsDistTable')}
+${extract('parseSsRecordTable')}
+${extract('computeFHLeagueBaselines')}
+${extract('fhInsightFor')}
 ${extract('fhLeagueFromPageTitle')}
 ${extract('fhLeagueFromSoccerstatsUrl')}
 ${extract('buildFhPasteFromHtml')}
@@ -171,7 +176,7 @@ ${extract('fetchSoccerstatsFH')}
 `;
 vm.createContext(sandbox);
 vm.runInContext(code, sandbox);
-vm.runInContext('var fhTableTeams = []; var fhLeague = ""; var fhTableData = { overall: [], home: [], away: [] }; var fhSplitSource = { overall: "none", home: "none", away: "none" }; var fhFixtureOptions = [];', sandbox);
+vm.runInContext('var fhTableTeams = []; var fhLeague = ""; var fhTableData = { overall: [], home: [], away: [] }; var shTableData = { overall: [], home: [], away: [] }; var fhExtras = { dist: [], lead: [], trail: [], league: "" }; var fhLeagueBaselines = { fh: null, sh: null, htDraw: null }; var fhSplitSource = { overall: "none", home: "none", away: "none" }; var fhFixtureOptions = [];', sandbox);
 
 let failed = 0;
 function check(label, cond, detail) {
@@ -202,7 +207,9 @@ check('detect: marker/header only -> ""', vm.runInContext(`detectFHLeagueTitle([
 check('variant: overall title', vm.runInContext(`detectFHVARIANT('First Half table (1-45 min.)')`, sandbox) === 'overall');
 check('variant: home title', vm.runInContext(`detectFHVARIANT('First Half home table')`, sandbox) === 'home');
 check('variant: away title', vm.runInContext(`detectFHVARIANT('First Half away table (1-45 min.)')`, sandbox) === 'away');
-check('variant: second half -> skip', vm.runInContext(`detectFHVARIANT('Second Half table (46-90 min.)')`, sandbox) === 'second');
+check('variant: second half -> own segment', vm.runInContext(`detectFHVARIANT('Second Half table (46-90 min.)')`, sandbox) === 'second');
+check('variant: second half home', vm.runInContext(`detectFHVARIANT('Second Half table (AT HOME, 46-90 min.)')`, sandbox) === 'secondHome');
+check('variant: second half away', vm.runInContext(`detectFHVARIANT('Second Half table (AWAY, 46-90 min.)')`, sandbox) === 'secondAway');
 check('variant: data row -> null', vm.runInContext(`detectFHVARIANT('1\tHeracles Almelo\t14\t10\t3\t1\t23\t6\t+17\t33')`, sandbox) === null);
 check('league embedded in FH title', vm.runInContext(`extractLeagueFromFhTitle('Eerste Divisie - First Half home table')`, sandbox) === 'Eerste Divisie');
 check('no league embedded -> ""', vm.runInContext(`extractLeagueFromFhTitle('First Half table (1-45 min.)')`, sandbox) === '');
@@ -214,7 +221,7 @@ check('paste split: 6 home rows', segs.segs.home.length === 6, `got ${segs.segs.
 check('paste split: 6 away rows', segs.segs.away.length === 6, `got ${segs.segs.away.length}`);
 const SH_PASTE = SAMPLE + '\n\nSecond Half table (46-90 min.)\nGP\tW\tD\tL\tGF\tGA\tGD\tPts\n1\tPhantom FC\t14\t5\t5\t4\t10\t10\t0\t20';
 const segs2 = JSON.parse(vm.runInContext(`JSON.stringify(parseFHPaste((${JSON.stringify(SH_PASTE)}).split('\\n').map(l => l.trim()).filter(l => l.length > 0)))`, sandbox));
-check('second-half rows skipped', segs2.segs.overall.length === 20 && segs2.segs.home.length === 0 && segs2.segs.away.length === 0, JSON.stringify({ o: segs2.segs.overall.length, h: segs2.segs.home.length, a: segs2.segs.away.length }));
+check('second-half rows captured in own segment', segs2.segs.overall.length === 20 && segs2.segs.second.length === 1 && segs2.segs.home.length === 0 && segs2.segs.away.length === 0, JSON.stringify({ o: segs2.segs.overall.length, s: segs2.segs.second.length, h: segs2.segs.home.length, a: segs2.segs.away.length }));
 const segs3 = JSON.parse(vm.runInContext(`JSON.stringify(parseFHPaste((${JSON.stringify(SAMPLE.split('\n').slice(1).join('\n'))}).split('\\n').map(l => l.trim()).filter(l => l.length > 0)))`, sandbox));
 check('title-less paste defaults to overall', segs3.segs.overall.length === 20, `got ${segs3.segs.overall.length}`);
 
@@ -271,7 +278,7 @@ vm.runInContext('exportFHReportCSV()', sandbox);
 check('filename: league slug + date', linkAttrs && linkAttrs.attrs.download === `techmari_fh_entertaining_teams_Netherlands_Eerste_Divisie_${todayISO}.csv`, linkAttrs && linkAttrs.attrs.download);
 const csvText = linkAttrs ? decodeURIComponent(linkAttrs.attrs.href) : '';
 check('CSV has section title', csvText.includes('SECTION 1: FH ENTERTAINING TEAMS RANKING'));
-check('CSV top row values correct', csvText.includes('"1","Jong FC Utrecht","13","14","17","-3","2.38","1.08","1.31","1.23","YES"'), csvText.split('\n').slice(5, 8).join(' / '));
+check('CSV top row values correct', csvText.includes('"1","Jong FC Utrecht","13","14","17","-3","2.38","1.08","1.31","1.23","31%","YES"'), csvText.split('\n').slice(5, 8).join(' / '));
 check('CSV 11 YES rows', (csvText.match(/,"YES"/g) || []).length === 11, `got ${(csvText.match(/,"YES"/g) || []).length}`);
 check('CSV note line present', csvText.includes('Note: ranking uses only the pasted table totals'));
 check('CSV no venue sections when absent', !csvText.includes('FH HOME TABLE') && !csvText.includes('FH AWAY TABLE'));
@@ -365,7 +372,7 @@ check('CSV combined: Section 2 home table', csv2.includes('SECTION 2: FH HOME TA
 check('CSV combined: Section 3 away table', csv2.includes('SECTION 3: FH AWAY TABLE (PASTED)'));
 check('CSV combined: Section 4 matchups', csv2.includes('SECTION 4: UPCOMING FIXTURES - EXPECTED FIRST-HALF GOALS'));
 check('CSV combined: venue columns in header', csv2.includes('Home GP,Home FH Goals/Match,Away GP,Away FH Goals/Match,Venue Profile'));
-check('CSV combined: Heracles row with venue data', csv2.includes('"Heracles Almelo","14","23","6","+17","2.07","1.64","0.43","2.36","YES","7","2.43","7","1.71","Home-tilted"'), csv2.split('\n').find(l => l.includes('Heracles')));
+check('CSV combined: Heracles row with venue data', csv2.includes('"Heracles Almelo","14","23","6","+17","2.07","1.64","0.43","2.36","21%","YES","7","2.43","7","1.71","Home-tilted"'), csv2.split('\n').find(l => l.includes('Heracles')));
 check('CSV combined: matchup row values', csv2.includes('"2.43","1.57","2.00","HIGH","FH goals candidate'), csv2.split('\n').find(l => l.includes('HIGH')));
 check('CSV combined: split source line', csv2.includes('Split source - Overall: pasted | Home: pasted | Away: pasted'));
 check('CSV combined: home table raw row', csv2.includes('"Heracles Almelo","7","6","1","0","15","2","+13","19","2.43"'));
@@ -430,17 +437,54 @@ const overallSix = SAMPLE.split('\n').filter(l => l.includes('\t') && !/^GP/.tes
 const homeRowsHtml = HOME_TABLE.split('\n').filter(l => l.includes('\t') && !/^GP/.test(l));
 const awayRowsHtml = AWAY_TABLE.split('\n').filter(l => l.includes('\t') && !/^GP/.test(l));
 const SS_URL = 'https://www.soccerstats.com/en-gb/leagues/netherlands/eerste-divisie/ned2/halftime';
+// Same-page half-time extras: scored/conceded-at-HT percentages + HT lead/trail records.
+const distRow = (t, vals) => `<tr><td>${t}</td>${vals.map(v => `<td>${v}</td>`).join('')}</tr>`;
+const recRow = t => `<tr><td>${t[0]}</td><td>${t[1]}</td><td>${t[2]}</td><td>${t[3]}</td><td>${t[4]}</td><td>${t[5]}</td><td>${t[6]}</td><td>${t[7]}</td><td>${t[8]}</td></tr>`;
+const DIST_TABLE = `<h2>Scored / conceded at half-time</h2>
+<table><tbody>
+<tr><th></th><th colspan="7">Goals scored at half-time</th><th colspan="5">Goals conceded at half-time</th></tr>
+<tr><th></th><th>4+</th><th>3</th><th>2</th><th>1</th><th>0</th><th>Avg.</th><th>League avg.</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4+</th></tr>
+${distRow('Heracles Almelo', ['7%', '14%', '29%', '36%', '14%', '1.21', '0.94', '29%', '36%', '21%', '7%', '7%'])}
+${distRow('FC Volendam', ['0%', '7%', '21%', '43%', '29%', '1.07', '0.94', '36%', '29%', '21%', '7%', '7%'])}
+${distRow('VVV-Venlo', ['7%', '7%', '21%', '36%', '29%', '1.14', '0.94', '29%', '21%', '21%', '14%', '14%'])}
+${distRow('NAC Breda', ['0%', '7%', '14%', '36%', '43%', '0.86', '0.94', '43%', '29%', '14%', '7%', '7%'])}
+${distRow('Almere City', ['0%', '0%', '14%', '36%', '50%', '0.64', '0.94', '50%', '29%', '14%', '7%', '0%'])}
+${distRow('Jong FC Utrecht', ['7%', '21%', '21%', '29%', '22%', '1.29', '0.94', '22%', '29%', '21%', '14%', '14%'])}
+</tbody></table>`;
+const LEAD_TABLE = `<h2>Record when leading at half-time</h2>
+<table><tbody>
+<tr><th></th><th>Matches</th><th>Perc.</th><th>W</th><th>D</th><th>L</th><th>Goals</th><th>Pts</th><th>PPG</th></tr>
+${recRow(['Heracles Almelo', '9', '64%', '8', '1', '0', '14-3', '25', '2.78'])}
+${recRow(['FC Volendam', '5', '36%', '4', '1', '0', '7-2', '13', '2.60'])}
+${recRow(['VVV-Venlo', '6', '43%', '5', '1', '0', '9-3', '16', '2.67'])}
+${recRow(['NAC Breda', '4', '29%', '4', '0', '0', '6-1', '12', '3.00'])}
+${recRow(['Almere City', '2', '14%', '2', '0', '0', '3-0', '6', '3.00'])}
+${recRow(['Jong FC Utrecht', '4', '31%', '2', '1', '1', '5-4', '7', '1.75'])}
+</tbody></table>`;
+const TRAIL_TABLE = `<h2>Record when trailing at half-time</h2>
+<table><tbody>
+<tr><th></th><th>Matches</th><th>Perc.</th><th>W</th><th>D</th><th>L</th><th>Goals</th><th>Pts</th><th>PPG</th></tr>
+${recRow(['Heracles Almelo', '3', '21%', '0', '1', '2', '3-6', '1', '0.33'])}
+${recRow(['FC Volendam', '5', '36%', '1', '1', '3', '4-8', '4', '0.80'])}
+${recRow(['VVV-Venlo', '4', '29%', '1', '1', '2', '4-6', '4', '1.00'])}
+${recRow(['NAC Breda', '3', '21%', '1', '1', '1', '3-3', '4', '1.33'])}
+${recRow(['Almere City', '2', '14%', '0', '1', '1', '1-2', '1', '0.50'])}
+${recRow(['Jong FC Utrecht', '3', '23%', '1', '0', '2', '3-4', '3', '1.00'])}
+</tbody></table>`;
 const SS_HTML = `<!DOCTYPE html><html><head><title>Netherlands - Eerste Divisie - First Half / Second Half stats - SoccerSTATS.com</title></head><body>
 <h1>Netherlands - Eerste Divisie</h1>
 <div class="advert">${htmlTable(['1\tAdvertisement slot\tx'], { header: false, linkedTeam: false })}</div>
 <h2>First Half table (1-45 min.)</h2>
 ${htmlTable(overallSix)}
 <h2>Second Half table (46-90 min.)</h2>
-${htmlTable(['1\tHeracles Almelo\t14\t6\t4\t4\t14\t11\t+3\t22'])}
+${htmlTable(['1\tHeracles Almelo\t14\t6\t4\t4\t8\t8\t0\t22', '2\tFC Volendam\t14\t5\t4\t5\t12\t14\t-2\t19'])}
 <h2>First Half table (AT HOME, 1-45 min.)</h2>
 ${htmlTable(homeRowsHtml)}
 <h2>First Half table (AWAY, 1-45 min.)</h2>
 ${htmlTable(awayRowsHtml)}
+${DIST_TABLE}
+${LEAD_TABLE}
+${TRAIL_TABLE}
 </body></html>`;
 
 (async () => {
@@ -450,9 +494,15 @@ ${htmlTable(awayRowsHtml)}
   check('ss: league from URL slugs', vm.runInContext(`fhLeagueFromSoccerstatsUrl('https://www.soccerstats.com/en-gb/leagues/netherlands/eerste-divisie/ned2/halftime')`, sandbox) === 'Netherlands - Eerste Divisie');
   const built = JSON.parse(vm.runInContext(`JSON.stringify(buildFhPasteFromHtml(${JSON.stringify(SS_HTML)}, ${JSON.stringify(SS_URL)}))`, sandbox));
   check('ss: extraction ok with canonical league', built.ok === true && built.league === 'Netherlands - Eerste Divisie', JSON.stringify(built).slice(0, 160));
-  check('ss: found 3 FH tables + 1 SH skipped', built.found.overall === 1 && built.found.home === 1 && built.found.away === 1 && built.found.second === 1, JSON.stringify(built.found));
+  check('ss: found 3 FH tables + 1 SH imported', built.found.overall === 1 && built.found.home === 1 && built.found.away === 1 && built.found.second === 1 && built.found.secondHome === 0 && built.found.secondAway === 0, JSON.stringify(built.found));
   const builtSegs = JSON.parse(vm.runInContext(`JSON.stringify(parseFHPaste((${JSON.stringify(built.text)}).split('\\n').map(l => l.trim()).filter(l => l.length > 0)))`, sandbox));
-  check('ss: generated paste -> 6/6/6 rows', builtSegs.segs.overall.length === 6 && builtSegs.segs.home.length === 6 && builtSegs.segs.away.length === 6, JSON.stringify({ o: builtSegs.segs.overall.length, h: builtSegs.segs.home.length, a: builtSegs.segs.away.length }));
+  check('ss: generated paste -> 6/6/6 rows + 2 second-half rows', builtSegs.segs.overall.length === 6 && builtSegs.segs.home.length === 6 && builtSegs.segs.away.length === 6 && builtSegs.segs.second.length === 2, JSON.stringify({ o: builtSegs.segs.overall.length, h: builtSegs.segs.home.length, a: builtSegs.segs.away.length, s: builtSegs.segs.second.length }));
+  check('ss: generated paste includes 2H title line', built.text.includes('Second Half table (46-90 min.)'));
+  check('ss: extras captured (6 dist / 6 lead / 6 trail)', built.extras.dist.length === 6 && built.extras.lead.length === 6 && built.extras.trail.length === 6, JSON.stringify({ d: built.extras.dist.length, l: built.extras.lead.length, t: built.extras.trail.length }));
+  const herDist = built.extras.dist.find(r => r.team === 'Heracles Almelo');
+  check('ss: dist row pct-mode (s0 14, s2 29, s4 7, c0 29, sAvg 1.21)', herDist && herDist.pct === true && herDist.s0 === 14 && herDist.s2 === 29 && herDist.s4 === 7 && herDist.c0 === 29 && herDist.sAvg === 1.21, JSON.stringify(herDist));
+  const herLead = built.extras.lead.find(r => r.team === 'Heracles Almelo');
+  check('ss: lead row parsed (9 / 64% / 8-1-0 / 14-3 / 2.78)', herLead && herLead.matches === 9 && herLead.perc === 64 && herLead.w === 8 && herLead.d === 1 && herLead.l === 0 && herLead.gf === 14 && herLead.ga === 3 && Math.abs(herLead.ppg - 2.78) < 1e-9, JSON.stringify(herLead));
   const blocked = JSON.parse(vm.runInContext(`JSON.stringify(buildFhPasteFromHtml('<html><head><title>Attention Required! | Cloudflare</title></head><body><div>Sorry, you have been blocked</div></body></html>', ''))`, sandbox));
   check('ss: blocked page -> clear error', blocked.ok === false && blocked.error.includes('No First/Second Half tables found'), blocked.error);
   check('ss: empty html -> error', JSON.parse(vm.runInContext(`JSON.stringify(buildFhPasteFromHtml('', ''))`, sandbox)).ok === false);
@@ -465,14 +515,50 @@ ${htmlTable(awayRowsHtml)}
   sandbox.fetch = async (u) => { fetchCalls.push(u); return { ok: true, status: 200, headers: { get: () => 'direct' }, text: async () => SS_HTML, json: async () => ({}) }; };
   await vm.runInContext('fetchSoccerstatsFH()', sandbox);
   check('ss fetch: proxy called with encoded URL', fetchCalls.length === 1 && fetchCalls[0].startsWith('/api/soccerstats.js?url=') && fetchCalls[0].includes('soccerstats.com%2Fen-gb'), fetchCalls[0]);
-  check('ss fetch: textarea filled with all 3 titles', els.fhRawInput.value.includes('First Half table (1-45 min.)') && els.fhRawInput.value.includes('First Half table (AT HOME, 1-45 min.)') && els.fhRawInput.value.includes('First Half table (AWAY, 1-45 min.)'));
+  check('ss fetch: textarea filled with all 3 titles + 2H title', els.fhRawInput.value.includes('First Half table (1-45 min.)') && els.fhRawInput.value.includes('First Half table (AT HOME, 1-45 min.)') && els.fhRawInput.value.includes('First Half table (AWAY, 1-45 min.)') && els.fhRawInput.value.includes('Second Half table (46-90 min.)'));
   check('ss fetch: league input auto-filled', els.fhLeagueInput.value === 'Netherlands - Eerste Divisie', els.fhLeagueInput.value);
-  check('ss fetch: status prefix + parse summary', els.fhTableStatus.innerText.startsWith('Fetched from SoccerSTATS.com (via direct): Overall + Home + Away table(s) (1 second-half table(s) skipped).') && els.fhTableStatus.innerText.includes('6 teams parsed') && els.fhTableStatus.innerText.includes('Netherlands - Eerste Divisie'), els.fhTableStatus.innerText);
+  check('ss fetch: status prefix + parse summary', els.fhTableStatus.innerText.startsWith('Fetched from SoccerSTATS.com (via direct): Overall + Home + Away + 2H Overall table(s) \u00b7 6 HT scored/conceded rows \u00b7 6 HT lead records \u00b7 6 HT trail records.') && els.fhTableStatus.innerText.includes('6 teams parsed') && els.fhTableStatus.innerText.includes('Netherlands - Eerste Divisie'), els.fhTableStatus.innerText);
   check('ss fetch: 6 teams ranked', vm.runInContext('fhTableTeams.length', sandbox) === 6);
   const ssHer = JSON.parse(vm.runInContext(`JSON.stringify(fhTableTeams.find(t => t.team === 'Heracles Almelo'))`, sandbox));
   check('ss fetch: Heracles 2.43 home / 1.71 away / Home-tilted', ssHer && ssHer.homeGpm.toFixed(2) === '2.43' && ssHer.awayGpm.toFixed(2) === '1.71' && ssHer.profile === 'Home-tilted', JSON.stringify(ssHer).slice(0, 160));
   check('ss fetch: URL saved to localStorage', sandbox.localStorage.getItem('techmari_fh_ss_url') === SS_URL, sandbox.localStorage.getItem('techmari_fh_ss_url'));
   check('ss fetch: button re-enabled', els.fhSsFetchBtn.disabled === false && els.fhSsFetchBtn.textContent === 'Fetch FH Tables');
+
+  // --- Same-page insight state after the fetch (2H tables + HT records + baselines) ---
+  check('ss fetch: 2H overall stored (2 rows)', vm.runInContext('shTableData.overall.length', sandbox) === 2);
+  check('ss fetch: extras league tagged', vm.runInContext('fhExtras.league', sandbox) === 'Netherlands - Eerste Divisie');
+  const base = JSON.parse(vm.runInContext(`JSON.stringify(fhLeagueBaselines)`, sandbox));
+  check('ss fetch: league baselines (1.77 FH / 1.50 2H / 27.7% HT draws)', Math.abs(base.fh - 147 / 83) < 1e-9 && Math.abs(base.sh - 1.5) < 1e-9 && Math.abs(base.htDraw - 23 / 83 * 100) < 1e-9, JSON.stringify(base));
+  const ins = JSON.parse(vm.runInContext(`JSON.stringify(fhInsightFor('Heracles Almelo', 'overall'))`, sandbox));
+  check('insight: Heracles 2H 1.14 + FH share 64.4%', Math.abs(ins.shOverall - 16 / 14) < 1e-9 && Math.abs(ins.share - 29 / 45 * 100) < 1e-9, JSON.stringify(ins));
+  check('insight: HT draw 21% / 0-scr 14% / 2+ 50% / CS 29% / lead 64% / trail 21%', Math.abs(ins.drawPct - 3 / 14 * 100) < 1e-9 && ins.s0Pct === 14 && ins.s2PlusPct === 50 && ins.c0Pct === 29 && ins.leadPct === 64 && ins.trailPct === 21, JSON.stringify(ins));
+  check('render: FH Insight table + baseline line + Fast starter tag', els.fhTableContent.innerHTML.includes('FH Insight') && els.fhTableContent.innerHTML.includes('League baseline: first half <strong>1.77</strong>') && els.fhTableContent.innerHTML.includes('second half <strong>1.50</strong>') && els.fhTableContent.innerHTML.includes('Fast starter'), els.fhTableContent.innerHTML.slice(0, 120));
+  vm.runInContext(`globalFixtures = [{ date: '20/11/2026', round: 'R16', league: 'Netherlands - Eerste Divisie', homeTeam: 'Heracles Almelo', awayTeam: 'FC Volendam' }]`, sandbox);
+  vm.runInContext('renderFHMatchups()', sandbox);
+  check('matchups: league FH avg shown in card line', els.fhMatchupsContent.innerHTML.includes('league FH avg 1.77'), els.fhMatchupsContent.innerHTML.slice(0, 300));
+  els.fhHomeSelect.value = 'Heracles Almelo';
+  els.fhAwaySelect.value = 'FC Volendam';
+  vm.runInContext('renderFHSelectedMatch()', sandbox);
+  check('card: host extras + fast starter, visitor 46% share (no tag at boundary)', els.fhSelectedMatchCard.innerHTML.includes('Host extras:') && els.fhSelectedMatchCard.innerHTML.includes('Host fast starter') && els.fhSelectedMatchCard.innerHTML.includes('1H 46% of goals (2H 1.86 G/M)') && !els.fhSelectedMatchCard.innerHTML.includes('Visitor second-half team'), els.fhSelectedMatchCard.innerHTML.slice(0, 400));
+  // Count-mode scored/conceded distribution -> converted with the team's GP.
+  vm.runInContext(`fhExtras.dist = [{ team: 'NAC Breda', pct: false, s4: 0, s3: 1, s2: 2, s1: 4, s0: 7, c0: 4, c1: 3, c2: 4, c3: 2, c4: 1, sAvg: 1.0, cAvg: null }]`, sandbox);
+  const nac = JSON.parse(vm.runInContext(`JSON.stringify(fhInsightFor('NAC Breda', 'overall'))`, sandbox));
+  check('insight: count-mode dist converted with GP (50 / 21.4 / 28.6)', Math.abs(nac.s0Pct - 50) < 1e-9 && Math.abs(nac.s2PlusPct - 3 / 14 * 100) < 1e-9 && Math.abs(nac.c0Pct - 4 / 14 * 100) < 1e-9, JSON.stringify(nac));
+  // League-mismatch guard: processing another league drops fetched extras + 2H rows; HT draw angle verdict.
+  const TINY = [
+    'First Half table (1-45 min.)',
+    'GP\tW\tD\tL\tGF\tGA\tGD\tPts',
+    '1\tDraw Dragons\t10\t2\t4\t4\t8\t8\t0\t10',
+    '2\tTie Tigers\t10\t2\t4\t4\t6\t6\t0\t10'
+  ].join('\n');
+  els.fhRawInput.value = TINY;
+  els.fhLeagueInput.value = 'Scotland - League 2';
+  vm.runInContext('processFHTable()', sandbox);
+  check('guard: fetched extras + 2H dropped on league change', vm.runInContext('fhExtras.dist.length === 0 && fhExtras.lead.length === 0 && fhExtras.trail.length === 0 && fhExtras.league === "" && shTableData.overall.length === 0', sandbox) === true, JSON.stringify(vm.runInContext('({ extras: fhExtras, sh: shTableData.overall.length })', sandbox)));
+  els.fhHomeSelect.value = 'Draw Dragons';
+  els.fhAwaySelect.value = 'Tie Tigers';
+  vm.runInContext('renderFHSelectedMatch()', sandbox);
+  check('card: HT draw angle verdict (both 40% HT draws)', els.fhSelectedMatchCard.innerHTML.includes('HT draw angle') && els.fhSelectedMatchCard.innerHTML.includes('HT draws 40%'), els.fhSelectedMatchCard.innerHTML.slice(0, 400));
 
   // Proxy hard failure -> clear error, textarea untouched
   els.fhRawInput.value = 'SENTINEL';
@@ -494,12 +580,14 @@ ${htmlTable(awayRowsHtml)}
   await vm.runInContext('fetchSoccerstatsFH()', sandbox);
   check('ss fetch: foreign domain rejected, no fetch', fetchCalls.length === 0 && els.fhTableStatus.innerText.includes('Only soccerstats.com URLs are supported.'), els.fhTableStatus.innerText);
 
-  // Clear FH Data also wipes both URL fields + their saved localStorage URLs
+  // Clear FH Data also wipes both URL fields + their saved localStorage URLs + same-page insight state
   els.fhRawInput.value = 'SENTINEL2';
   els.fhSsUrlInput.value = SS_URL;
   els.swUrlInput.value = 'https://www.soccerway.com/scotland/league-two/results/';
   sandbox.localStorage.setItem('techmari_fh_ss_url', SS_URL);
   sandbox.localStorage.setItem('techmari_sw_url', 'https://www.soccerway.com/scotland/league-two/results/');
+  vm.runInContext(`fhExtras = { dist: [{ team: 'X', pct: true, s4: 0, s3: 0, s2: 0, s1: 0, s0: 100, c0: 0, c1: 0, c2: 0, c3: 0, c4: 0, sAvg: null, cAvg: null }], lead: [{ team: 'X', matches: 1, perc: 50, w: 1, d: 0, l: 0, gf: 1, ga: 0, pts: 3, ppg: 3 }], trail: [], league: 'Netherlands - Eerste Divisie' }`, sandbox);
+  vm.runInContext('shTableData = { overall: [{ pos: 1, team: "X", gp: 2, w: 1, d: 1, l: 0, gf: 2, ga: 1, gd: 1, pts: 4 }], home: [], away: [] }; fhLeagueBaselines = { fh: 1.5, sh: 1.2, htDraw: 25 }', sandbox);
   vm.runInContext('clearFHData()', sandbox);
   check('clear: SoccerSTATS URL field emptied', els.fhSsUrlInput.value === '', els.fhSsUrlInput.value);
   check('clear: Soccerway URL field emptied', els.swUrlInput.value === '', els.swUrlInput.value);
@@ -507,6 +595,9 @@ ${htmlTable(awayRowsHtml)}
   check('clear: saved Soccerway URL removed', sandbox.localStorage.getItem('techmari_sw_url') === null, sandbox.localStorage.getItem('techmari_sw_url'));
   check('clear: confirmation mentions URL fields', els.fhTableStatus.innerText.includes('URL fields reset'), els.fhTableStatus.innerText);
   check('clear: paste box emptied too', els.fhRawInput.value === '');
+  check('clear: same-page extras wiped', vm.runInContext('fhExtras.dist.length === 0 && fhExtras.lead.length === 0 && fhExtras.trail.length === 0 && fhExtras.league === ""', sandbox) === true);
+  check('clear: 2H tables wiped', vm.runInContext('shTableData.overall.length', sandbox) === 0);
+  check('clear: baselines reset', vm.runInContext('fhLeagueBaselines.fh === null && fhLeagueBaselines.sh === null && fhLeagueBaselines.htDraw === null', sandbox) === true);
 })().then(() => {
   console.log(failed === 0 ? '\nALL TESTS PASS' : `\n${failed} TEST(S) FAILED`);
   process.exit(failed === 0 ? 0 : 1);
