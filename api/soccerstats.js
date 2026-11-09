@@ -13,8 +13,9 @@
  *      reader quota (anonymous reader calls can be rate-limited).
  *   3. If both fail, return 502 — the app falls back to the manual paste box.
  *
- * Politeness: responses are cached at the edge for 6h (stale-while-revalidate
- * 24h) and upstream requests are paced >= 1.2s apart.
+ * Politeness: responses are cached at the edge for 10 min (stale-while-revalidate
+ * 1h — league tables update after every round, so caches stay short) and
+ * upstream requests are paced >= 1.2s apart.
  */
 
 export const config = {
@@ -85,7 +86,7 @@ export default async function handler(req, res) {
         if (r.ok && !isBlocked(r.status, body) && /<table/i.test(body)) {
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
             res.setHeader('X-Soccerstats-Via', 'direct');
-            res.setHeader('Cache-Control', 'public, s-maxage=21600, stale-while-revalidate=86400');
+            res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=3600');
             return res.status(200).send(slimHtml(body));
         }
         console.warn(`[soccerstats] direct fetch unusable (status=${r.status}, blocked=${isBlocked(r.status, body)})`);
@@ -102,7 +103,7 @@ export default async function handler(req, res) {
         if (r.ok && !isBlocked(r.status, body) && /<table/i.test(body)) {
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
             res.setHeader('X-Soccerstats-Via', 'reader');
-            res.setHeader('Cache-Control', 'public, s-maxage=21600, stale-while-revalidate=86400');
+            res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=3600');
             return res.status(200).send(slimHtml(body));
         }
         console.warn(`[soccerstats] reader fallback unusable (status=${r.status})`);

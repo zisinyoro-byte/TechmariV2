@@ -199,7 +199,7 @@ el('rawInput').value = 'OLD PASTE CONTENT';
 el('statusArea').innerText = '';
 (async () => {
   await run('fetchSoccerwayResults()');
-  check('proxy URL passed as /api/soccerway.js?url=<encoded>', fetchArg === '/api/soccerway.js?url=' + encodeURIComponent('https://www.soccerway.com/scotland/league-two/results/'), String(fetchArg));
+  check('proxy URL passed as /api/soccerway.js?url=<encoded>&_=<cache buster>', /^\/api\/soccerway\.js\?url=https%3A%2F%2Fwww\.soccerway\.com%2Fscotland%2Fleague-two%2Fresults%2F&_=\d+$/.test(String(fetchArg)), String(fetchArg));
   check('textarea filled with generated paste', el('rawInput').value === expectedText, el('rawInput').value.slice(0, 60));
   check('status prefixed with fetch summary + league', el('statusArea').innerText.startsWith('Fetched from Soccerway: 3 result(s) in 2 round(s) — Scotland - League 2. 3 upcoming fixture(s) listed in the Step 2 dropdown.'), el('statusArea').innerText);
   check('fetch captured 3 upcoming fixtures', run('globalSwFixtures.length') === 3, `${run('globalSwFixtures.length')}`);
@@ -235,7 +235,7 @@ el('statusArea').innerText = '';
   el('swUrlInput').value = 'https://example.com/scotland/league-two/results/';
   el('statusArea').innerText = '';
   await run('fetchSoccerwayResults()');
-  check('foreign domain rejected (no network call)', el('statusArea').innerText.includes('Only soccerway.com URLs are supported.') && fetchArg === '/api/soccerway.js?url=' + encodeURIComponent('https://www.soccerway.com/scotland/league-two/results/'), el('statusArea').innerText + ' | ' + String(fetchArg));
+  check('foreign domain rejected (no new network call)', el('statusArea').innerText.includes('Only soccerway.com URLs are supported.') && fetchArg.startsWith('/api/soccerway.js?url=' + encodeURIComponent('https://www.soccerway.com/scotland/league-two/results/') + '&_='), el('statusArea').innerText + ' | ' + String(fetchArg));
 
   // --- Test 11: captured fixture list + select -> auto-predict flow ---
   run(`setSwFixtures(soccerwayFixturesFromFeed(${JSON.stringify(SAMPLE_HTML)}, 'Scotland - League 2'), 'Scotland - League 2')`);

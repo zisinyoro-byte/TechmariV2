@@ -2573,6 +2573,11 @@
         function detectFHVARIANT(title) {
             const t = String(title || '');
             if (!/first half|second half|1-45|45 min|46-90/i.test(t)) return null;
+            // Summary/navigation headings like 'First / Second Half tables' mention BOTH
+            // halves — they are page furniture, never a table title. Mis-classifying one
+            // as a variant lets it claim the first data table and shifts every later
+            // section by one (2H rows imported as 1H — happened on the en-gb redesign).
+            if (/\bfirst\b/i.test(t) && /\bsecond\b/i.test(t)) return null;
             if (/second half|46-90/i.test(t)) {
                 if (/\baway\b/i.test(t)) return 'secondAway';
                 if (/\bhome\b/i.test(t)) return 'secondHome';
@@ -2673,19 +2678,25 @@
             return null;
         }
 
-        // 'Scored / conceded at half-time' table. Second header row layout:
-        //   4+ 3 2 1 0 Avg. [League avg.] | 0 1 2 3 4+ [Avg.] [League avg.]
-        // Cells are percentages on current pages ('21%'); whole-number match counts also tolerated
-        // (converted with the team's GP later). Rows:
+        // 'Scored / conceded at half-time' table — two known layouts:
+        //   OLD: Team | 4+ 3 2 1 0 Avg. [League avg.] | 0 1 2 3 4+ [Avg.] [League avg.]
+        //   NEW (en-gb redesign): 4+ 3 2 1 0 Avg. | TEAM | Avg. 0 1 2 3 4+ — the team
+        //        column sits mid-row, zeros are '-', team rows are match counts while
+        //        the 'League avg.' row shows percentages, and the Total/Home/Away
+        //        blocks can share one <table> (first block per team wins = Total).
+        // Cells on current pages: counts with '-' for zero; whole-number match counts
+        // and percentage layouts both tolerated (percentages converted with GP later).
+        // Rows:
         //   { team, pct, s4, s3, s2, s1, s0, sAvg, c0, c1, c2, c3, c4, cAvg }
         function parseSsDistTable(tableEl) {
             const rows = [];
             const isNum = v => /^-?\d+(\.\d+)?%?$/.test(String(v || '').trim());
-            const num = v => { const m = String(v || '').trim().match(/^(-?\d+(?:\.\d+)?)%?$/); return m ? parseFloat(m[1]) : null; };
+            const isVal = v => { const s = String(v || '').trim(); return s === '-' || isNum(s); };   // '-' means zero
+            const num = v => { const m = String(v || '').trim().replace(/^-$/, '0').match(/^(-?\d+(?:\.\d+)?)%?$/); return m ? parseFloat(m[1]) : null; };
             let map = null;   // semantic key per numeric column; null -> positional fallback by row width
             const keysFor = low => {
                 const keys = [];
-                let phase = 'scored', seenScored0 = false;
+                let phase = 'scored', seenScored0 = false, sAvgSeen = false;
                 for (const c of low) {
                     const cl = String(c || '').trim().replace(/\.$/, '');
                     if (phase === 'scored' && keys.length === 0 && !/^4\+$/.test(cl)) continue;   // skip leading 'Team'/label cells
@@ -2698,7 +2709,11 @@
                     }
                     if (phase === 'conceded' && /^4\+$/.test(cl)) { keys.push('c4'); continue; }
                     if (phase === 'conceded' && /^[123]$/.test(cl)) { keys.push('c' + cl); continue; }
-                    if (/^avg$/i.test(cl)) { keys.push(phase === 'scored' ? 'sAvg' : 'cAvg'); continue; }
+                    if (/^avg$/i.test(cl)) {
+                        if (phase === 'scored' && !sAvgSeen) { keys.push('sAvg'); sAvgSeen = true; }
+                        else { phase = 'conceded'; keys.push('cAvg'); }   // NEW layout: second 'Avg.' opens the conceded side
+                        continue;
+                    }
                     if (/^league avg$/i.test(cl)) { keys.push(phase === 'scored' ? 'sLavg' : 'cLavg'); continue; }
                     return null;
                 }
@@ -2711,24 +2726,27 @@
                 if (low.some(c => /goals scored at half-time/i.test(c))) return;   // group header row
                 const headerKeys = keysFor(low);
                 if (headerKeys) { map = headerKeys; return; }
-                const teamIdx = cells.findIndex(c => !isNum(c));
+                const teamIdx = cells.findIndex(c => !isVal(c));   // first non-value cell = team (works for both layouts)
                 if (teamIdx < 0) return;
                 const team = cells[teamIdx].trim();
                 if (!team || /^league avg/i.test(team)) return;   // league-average label — not a team row
-                const rest = cells.slice(teamIdx + 1);
-                if (rest.some(c => !isNum(c))) return;             // only fully numeric rows
+                if (rows.some(r => r.team.toLowerCase() === team.toLowerCase())) return;   // Total/Home/Away blocks in one table — first (Total) wins
+                const nonTeam = cells.slice(0, teamIdx).concat(cells.slice(teamIdx + 1));
+                if (nonTeam.some(c => !isVal(c))) return;             // only fully numeric rows
+                const vals = nonTeam.map(c => { const s = String(c).trim(); return s === '-' ? '0' : s; });
                 let keys = map;
-                if (!keys || keys.length !== rest.length) {
-                    const n = rest.length;
-                    keys = n === 12 ? ['s4', 's3', 's2', 's1', 's0', 'sAvg', 'sLavg', 'c0', 'c1', 'c2', 'c3', 'c4']
+                if (!keys || keys.length !== vals.length) {
+                    const n = vals.length;
+                    keys = n === 12 && teamIdx > 0 ? ['s4', 's3', 's2', 's1', 's0', 'sAvg', 'cAvg', 'c0', 'c1', 'c2', 'c3', 'c4']
+                         : n === 12 ? ['s4', 's3', 's2', 's1', 's0', 'sAvg', 'sLavg', 'c0', 'c1', 'c2', 'c3', 'c4']
                          : n === 13 ? ['s4', 's3', 's2', 's1', 's0', 'sAvg', 'sLavg', 'c0', 'c1', 'c2', 'c3', 'c4', 'cAvg']
                          : n === 14 ? ['s4', 's3', 's2', 's1', 's0', 'sAvg', 'sLavg', 'c0', 'c1', 'c2', 'c3', 'c4', 'cAvg', 'cLavg']
                          : n === 11 ? ['s4', 's3', 's2', 's1', 's0', 'sAvg', 'c0', 'c1', 'c2', 'c3', 'c4']
                          : n === 10 ? ['s4', 's3', 's2', 's1', 's0', 'c0', 'c1', 'c2', 'c3', 'c4'] : null;
                 }
-                if (!keys || keys.length !== rest.length) return;
-                const row = { team, pct: /%/.test(rest.join(' ')), sAvg: null, cAvg: null };
-                keys.forEach((k, i) => { row[k] = num(rest[i]); });
+                if (!keys || keys.length !== vals.length) return;
+                const row = { team, pct: /%/.test(vals.join(' ')), sAvg: null, cAvg: null };
+                keys.forEach((k, i) => { row[k] = num(vals[i]); });
                 if (['s4', 's3', 's2', 's1', 's0', 'c0', 'c1', 'c2', 'c3', 'c4'].every(k => Number.isFinite(row[k]))) rows.push(row);
             });
             return rows;
@@ -2736,11 +2754,15 @@
 
         // 'Record when leading/trailing at half-time' tables.
         // Header: (Team) | Matches | Perc. | W | D | L | Goals | Pts | PPG — Perc. like '64%'.
+        // Matches may be a plain count ('9') or '4 out of 6' (en-gb redesign);
+        // teams that never led/trailed appear as '0 out of N' — kept (0% is meaningful).
         // Rows: { team, matches, perc, w, d, l, gf, ga, pts, ppg } (gf/ga/pts/ppg nullable).
         function parseSsRecordTable(tableEl) {
             const rows = [];
             const isNum = v => /^-?\d+(\.\d+)?%?$/.test(String(v || '').trim());
+            const isMatchesCell = v => { const s = String(v || '').trim(); return isNum(s) || /^\d+\s+out of\s+\d+$/i.test(s); };
             const num = v => { const m = String(v || '').trim().match(/^(-?\d+(?:\.\d+)?)%?$/); return m ? parseFloat(m[1]) : null; };
+            const outOf = v => { const m = String(v || '').trim().match(/^(\d+)\s+out of\s+\d+$/i); return m ? parseInt(m[1], 10) : null; };
             const pair = v => { const m = String(v || '').trim().match(/^(\d+)\s*-\s*(\d+)$/); return m ? [parseInt(m[1], 10), parseInt(m[2], 10)] : null; };
             const LABELS = [['matches', /^matches$/i], ['perc', /^perc/i], ['w', /^w$/i], ['d', /^d$/i], ['l', /^l$/i], ['goals', /^goals$/i], ['pts', /^pts$/i], ['ppg', /^ppg$/i]];
             let order = null;
@@ -2751,12 +2773,13 @@
                     order = LABELS.filter(l => cells.some(c => l[1].test(c))).map(l => l[0]);
                     return;
                 }
-                const teamIdx = cells.findIndex(c => !isNum(c) && !pair(c));
+                const teamIdx = cells.findIndex(c => !isNum(c) && !pair(c) && !isMatchesCell(c));
                 if (teamIdx < 0) return;
                 const team = cells[teamIdx];
                 if (/^league avg/i.test(team)) return;
+                if (rows.some(r => r.team.toLowerCase() === team.toLowerCase())) return;   // Total/Home/Away blocks in one table — first (Total) wins
                 const rest = cells.slice(teamIdx + 1);
-                if (rest.some(c => !isNum(c) && !pair(c))) return;
+                if (rest.some(c => !isNum(c) && !pair(c) && !isMatchesCell(c))) return;
                 let keys = order;
                 if (!keys || keys.length !== rest.length) {
                     keys = rest.length === 8 ? ['matches', 'perc', 'w', 'd', 'l', 'goals', 'pts', 'ppg']
@@ -2767,9 +2790,10 @@
                 const row = { team, matches: null, perc: null, w: null, d: null, l: null, gf: null, ga: null, pts: null, ppg: null };
                 keys.forEach((k, i) => {
                     if (k === 'goals') { const p = pair(rest[i]); if (p) { row.gf = p[0]; row.ga = p[1]; } return; }
+                    if (k === 'matches') { row.matches = num(rest[i]) !== null ? num(rest[i]) : outOf(rest[i]); return; }
                     row[k] = num(rest[i]);
                 });
-                if (!Number.isFinite(row.matches) || row.matches < 1) return;
+                if (!Number.isFinite(row.matches) || row.matches < 0) return;
                 if (Number.isFinite(row.w) && Number.isFinite(row.d) && Number.isFinite(row.l) && row.w + row.d + row.l !== row.matches) return;   // misaligned row
                 rows.push(row);
             });
@@ -2806,12 +2830,23 @@
             catch (e) { return { ...empty, error: 'Could not parse the fetched page.' }; }
             const league = canonLeagueTitle(fhLeagueFromPageTitle(doc.title || ''))
                 || canonLeagueTitle(fhLeagueFromSoccerstatsUrl(pageUrl)) || '';
-            const titleEls = Array.from(doc.querySelectorAll('*')).filter(el =>
+            const isHalfTableTitle = el =>
                 el.children.length === 0 && el.textContent && String(el.textContent).length < 90
-                && /first half table|second half table/i.test(el.textContent));
+                && /first half table|second half table/i.test(el.textContent);
+            const titleEls = Array.from(doc.querySelectorAll('*')).filter(isHalfTableTitle);
             if (titleEls.length === 0) {
                 return { ...empty, league, error: 'No First/Second Half tables found on that page. If the site blocked the fetch, open the URL in your browser and paste the tables manually.' };
             }
+            // Structural bounds: a heading may only claim tables that sit between it and
+            // the NEXT section heading (any half-table or half-time-extras heading).
+            // Without this, a stray/summary match above the real sections steals the
+            // first data table and shifts every later claim by one table.
+            const isBoundCandidate = el =>
+                el.textContent && String(el.textContent).length < 120
+                && (/first half table|second half table/i.test(el.textContent)
+                    || /scored\s*\/?\s*conceded at half-time/i.test(el.textContent)
+                    || /record when (leading|trailing) at half-time/i.test(el.textContent));
+            const boundEls = Array.from(doc.querySelectorAll('*')).filter(isBoundCandidate);
             const tables = Array.from(doc.querySelectorAll('table'));
             const claimed = new Set();
             const lines = [];
@@ -2821,9 +2856,11 @@
                 const variant = detectFHVARIANT(rawTitle);
                 if (!variant) return;
                 if (imported[variant] > 0) return;  // duplicate section — first occurrence wins
+                const bound = boundEls.find(e => e !== tEl && (tEl.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING));
                 for (const t of tables) {
                     if (claimed.has(t)) continue;
                     if (!(tEl.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+                    if (bound && (bound.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;   // at/after the next heading — not ours
                     const rowLines = soccerstatsTableLines(t);
                     if (rowLines.length === 0) continue;   // stray/ad table — keep looking
                     claimed.add(t);
@@ -2872,7 +2909,7 @@
             statusArea.innerText = 'Fetching FH tables from SoccerSTATS.com\u2026';
             statusArea.style.color = '#6c757d';
             try {
-                const resp = await fetch('/api/soccerstats.js?url=' + encodeURIComponent(parsed.href));
+                const resp = await fetch('/api/soccerstats.js?url=' + encodeURIComponent(parsed.href) + '&_=' + Date.now());
                 if (!resp.ok) {
                     let detail = '';
                     try { const j = await resp.json(); if (j && j.detail) detail = ' ' + j.detail; } catch (e) {}
@@ -2883,6 +2920,11 @@
                 const via = resp.headers && resp.headers.get ? (resp.headers.get('X-Soccerstats-Via') || '') : '';
                 const built = buildFhPasteFromHtml(html, parsed.href);
                 if (!built.ok) { fail('SoccerSTATS fetch: ' + built.error); return; }
+                // A fetch is authoritative: drop every previously loaded variant (incl. 2H)
+                // before applying the fetched tables, so rows from an older fetch or a
+                // different league can never linger behind a partial/changed page.
+                fhTableData = { overall: [], home: [], away: [], second: [], secondHome: [], secondAway: [] };
+                shTableData = { overall: [], home: [], away: [] };
                 const ta = document.getElementById('fhRawInput');
                 if (ta) ta.value = built.text;
                 const leagueInput = document.getElementById('fhLeagueInput');
@@ -3107,7 +3149,7 @@
             statusArea.innerText = 'Fetching results from Soccerway\u2026';
             statusArea.style.color = '#6c757d';
             try {
-                const resp = await fetch('/api/soccerway.js?url=' + encodeURIComponent(parsed.href));
+                const resp = await fetch('/api/soccerway.js?url=' + encodeURIComponent(parsed.href) + '&_=' + Date.now());
                 if (!resp.ok) {
                     let detail = '';
                     try { const j = await resp.json(); if (j && j.detail) detail = ' ' + j.detail; } catch (e) {}
@@ -3452,7 +3494,7 @@
         }
 
         function clearFHData() {
-            fhTableData = { overall: [], home: [], away: [] };
+            fhTableData = { overall: [], home: [], away: [], second: [], secondHome: [], secondAway: [] };
             shTableData = { overall: [], home: [], away: [] };
             fhExtras = { dist: [], lead: [], trail: [], league: '' };
             fhLeagueBaselines = { fh: null, sh: null, htDraw: null };

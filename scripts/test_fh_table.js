@@ -598,6 +598,98 @@ ${TRAIL_TABLE}
   check('clear: same-page extras wiped', vm.runInContext('fhExtras.dist.length === 0 && fhExtras.lead.length === 0 && fhExtras.trail.length === 0 && fhExtras.league === ""', sandbox) === true);
   check('clear: 2H tables wiped', vm.runInContext('shTableData.overall.length', sandbox) === 0);
   check('clear: baselines reset', vm.runInContext('fhLeagueBaselines.fh === null && fhLeagueBaselines.sh === null && fhLeagueBaselines.htDraw === null', sandbox) === true);
+
+  // =====================================================================
+  // Task 18 regression: SoccerSTATS en-gb redesign (Ecuador - Liga Pro).
+  // The page's 'First / Second Half tables' summary heading used to be
+  // mis-read as a Second Half table title, claimed the First Half overall
+  // table, and pushed every later claim one table down — the app then showed
+  // SECOND HALF data as FH (Libertad #1, Manta un-HOT). Fixture mirrors the
+  // live page (2026-11-09): interleaved FH/SH sections, summary heading with
+  // Total/Home/Away quick links, new dist layout (team mid-row, '-' zeros,
+  // counts), lead/trail 'N out of M' matches, merged Total+Home trail table.
+  // =====================================================================
+  const EC_FIXTURE = fs.readFileSync(path.join(__dirname, 'fixtures', 'ecuador_halftime_2026.html'), 'utf8');
+  const EC_URL = 'https://www.soccerstats.com/en-gb/leagues/ecuador/liga-pro/ecuador/halftime';
+
+  check('ec: variant rejects dual-half summary heading', vm.runInContext(`detectFHVARIANT('First / Second Half tables')`, sandbox) === null);
+  check('ec: variant still classifies real titles', vm.runInContext(`detectFHVARIANT('First Half table (1-45 min.)') === 'overall' && detectFHVARIANT('Second Half table (AT HOME, 46-90 min.)') === 'secondHome' && detectFHVARIANT('First Half table (AWAY, 1-45 min.)') === 'away'`, sandbox) === true);
+
+  const ecBuilt = JSON.parse(vm.runInContext(`JSON.stringify(buildFhPasteFromHtml(${JSON.stringify(EC_FIXTURE)}, ${JSON.stringify(EC_URL)}))`, sandbox));
+  check('ec: extraction ok, league from title/url', ecBuilt.ok === true && ecBuilt.league === 'Ecuador - Liga Pro', JSON.stringify(ecBuilt).slice(0, 200));
+  check('ec: all six variants found exactly once', ecBuilt.found.overall === 1 && ecBuilt.found.home === 1 && ecBuilt.found.away === 1 && ecBuilt.found.second === 1 && ecBuilt.found.secondHome === 1 && ecBuilt.found.secondAway === 1, JSON.stringify(ecBuilt.found));
+  const ecSegs = JSON.parse(vm.runInContext(`JSON.stringify(parseFHPaste((${JSON.stringify(ecBuilt.text)}).split('\\n').map(l => l.trim()).filter(l => l.length > 0)))`, sandbox)).segs;
+  // The critical assertion: FH overall must be the REAL First Half table (Macara 6 GP, GF 5, GA 1)...
+  check('ec: overall = real 1H table (Macara first, 16 rows)', ecSegs.overall.length === 16 && ecSegs.overall[0].team === 'Macara' && ecSegs.overall[0].gp === 6 && ecSegs.overall[0].gf === 5 && ecSegs.overall[0].ga === 1, JSON.stringify(ecSegs.overall[0]));
+  // ...NOT the Second Half table (whose first row is Delfin).
+  check('ec: overall row 1 is NOT a 2H row (Delfin 2H leader absent from 1H top)', ecSegs.overall[0].team !== 'Delfin', ecSegs.overall[0].team);
+  check('ec: second = real 2H table (Delfin first, 16 rows)', ecSegs.second.length === 16 && ecSegs.second[0].team === 'Delfin', JSON.stringify(ecSegs.second[0]));
+  check('ec: home = FH AT HOME (Libertad first)', ecSegs.home.length === 16 && ecSegs.home[0].team === 'Libertad', ecSegs.home[0] && ecSegs.home[0].team);
+  check('ec: away = FH AWAY (Macara first)', ecSegs.away.length === 16 && ecSegs.away[0].team === 'Macara', ecSegs.away[0] && ecSegs.away[0].team);
+  check('ec: 2H home/away = SH AT HOME/AWAY (Delfin / Emelec first)', ecSegs.secondHome[0].team === 'Delfin' && ecSegs.secondAway[0].team === 'Emelec', JSON.stringify([ecSegs.secondHome[0].team, ecSegs.secondAway[0].team]));
+  check('ec: summary heading line not injected as 2H data', !ecSegs.second.some(r => r.team === 'Macara' && r.gp === 6 && r.gf === 5 && r.ga === 1), '1H rows leaked into 2H segment');
+
+  // New dist layout parsed: 16 rows from the Total block (Home/Away blocks ignored).
+  check('ec: dist 16 rows from new mid-row-team layout', ecBuilt.extras.dist.length === 16, String(ecBuilt.extras.dist.length));
+  const ecMantaDist = ecBuilt.extras.dist.find(r => r.team === 'Manta');
+  check('ec: Manta dist counts + avgs (s0 1 / s2 2 / sAvg 1.2 / cAvg 0.8, pct=false)', ecMantaDist && ecMantaDist.pct === false && ecMantaDist.s0 === 1 && ecMantaDist.s2 === 2 && ecMantaDist.s1 === 2 && ecMantaDist.sAvg === 1.2 && ecMantaDist.cAvg === 0.8 && ecMantaDist.c0 === 2 && ecMantaDist.c2 === 1, JSON.stringify(ecMantaDist));
+  const ecLibDist = ecBuilt.extras.dist.find(r => r.team === 'Libertad');
+  check('ec: Libertad dist dashes read as zero (s1 3 / s0 3 / c0 4 / cAvg 0.33)', ecLibDist && ecLibDist.s1 === 3 && ecLibDist.s0 === 3 && ecLibDist.s4 === 0 && ecLibDist.c0 === 4 && ecLibDist.cAvg === 0.33, JSON.stringify(ecLibDist));
+  // Lead/trail with '4 out of 6' Matches cells; 0-out-of-N rows kept.
+  check('ec: lead 16 rows', ecBuilt.extras.lead.length === 16, String(ecBuilt.extras.lead.length));
+  const ecMacLead = ecBuilt.extras.lead.find(r => r.team === 'Macara');
+  check('ec: Macara lead "4 out of 6" (matches 4 / 67% / 8-2 / PPG 3)', ecMacLead && ecMacLead.matches === 4 && ecMacLead.perc === 67 && ecMacLead.w === 4 && ecMacLead.gf === 8 && ecMacLead.ga === 2 && Math.abs(ecMacLead.ppg - 3) < 1e-9, JSON.stringify(ecMacLead));
+  const ecDelfinLead = ecBuilt.extras.lead.find(r => r.team === 'Delfin');
+  check('ec: Delfin never-led row kept (0 out of 5)', ecDelfinLead && ecDelfinLead.matches === 0 && ecDelfinLead.perc === 0, JSON.stringify(ecDelfinLead));
+  check('ec: trail 16 rows (merged Total+Home table deduped)', ecBuilt.extras.trail.length === 16, String(ecBuilt.extras.trail.length));
+  const ecAucasTrail = ecBuilt.extras.trail.find(r => r.team === 'Aucas');
+  check('ec: Aucas trail Total block wins (matches 3 / 50% / 2-6)', ecAucasTrail && ecAucasTrail.matches === 3 && ecAucasTrail.perc === 50 && ecAucasTrail.gf === 2 && ecAucasTrail.ga === 6, JSON.stringify(ecAucasTrail));
+
+  // End-to-end ranking with the corrected data: FH goals/match order.
+  vm.runInContext('clearFHData()', sandbox);
+  els.fhRawInput.value = ecBuilt.text;
+  els.fhLeagueInput.value = ecBuilt.league;
+  vm.runInContext(`fhExtras = { dist: ecExtras.dist, lead: ecExtras.lead, trail: ecExtras.trail, league: 'Ecuador - Liga Pro' }`.replace(/ecExtras/g, JSON.stringify(ecBuilt.extras).replace(/'/g, "\\'")), sandbox);
+  vm.runInContext('processFHTable()', sandbox);
+  const ecOrder = JSON.parse(vm.runInContext('JSON.stringify(fhTableTeams.map(t => t.team))', sandbox));
+  check('ec: 16 teams ranked', ecOrder.length === 16, String(ecOrder.length));
+  check('ec: Delfin #1 by FH goals/match (2.60), Manta #2 (2.00), Mushuc Runa #3, Aucas #4', ecOrder[0] === 'Delfin' && ecOrder[1] === 'Manta' && ecOrder[2] === 'Mushuc Runa' && ecOrder[3] === 'Aucas', JSON.stringify(ecOrder));
+  check('ec: Libertad near bottom (0.83), NOT #1', ecOrder.indexOf('Libertad') === 13, 'Libertad at ' + ecOrder.indexOf('Libertad'));
+  const ecDelfin = JSON.parse(vm.runInContext(`JSON.stringify(fhTableTeams.find(t => t.team === 'Delfin'))`, sandbox));
+  check('ec: Delfin 13 goals in 5 -> 2.60 FH G/M, entertaining', Math.abs(ecDelfin.goalsPerMatch - 13 / 5) < 1e-9 && ecDelfin.entertaining === true && ecDelfin.gp === 5 && ecDelfin.gf === 5 && ecDelfin.ga === 8, JSON.stringify(ecDelfin));
+  const ecManta = JSON.parse(vm.runInContext(`JSON.stringify(fhTableTeams.find(t => t.team === 'Manta'))`, sandbox));
+  check('ec: Manta HOT again (2.00 FH G/M over 1.5 threshold)', Math.abs(ecManta.goalsPerMatch - 2) < 1e-9 && ecManta.entertaining === true, JSON.stringify(ecManta));
+  const ecLibertad = JSON.parse(vm.runInContext(`JSON.stringify(fhTableTeams.find(t => t.team === 'Libertad'))`, sandbox));
+  check('ec: Libertad 0.83 FH G/M, not entertaining (2H data no longer shown as 1H)', Math.abs(ecLibertad.goalsPerMatch - 5 / 6) < 1e-9 && ecLibertad.entertaining === false, JSON.stringify(ecLibertad));
+  check('ec: exactly 4 entertaining teams (Delfin/Manta/Mushuc Runa/Aucas)', vm.runInContext('fhTableTeams.filter(t => t.entertaining).length', sandbox) === 4 && els.fhTableContent.innerHTML.split('FH HOT').length - 1 === 4, String(vm.runInContext('fhTableTeams.filter(t => t.entertaining).length', sandbox)));
+  check('ec: status 16 teams + all six variants listed', els.fhTableStatus.innerText.includes('16 teams parsed') && els.fhTableStatus.innerText.includes('Overall + Home + Away + 2H Overall + 2H Home + 2H Away') && els.fhTableStatus.innerText.includes('Ecuador - Liga Pro'), els.fhTableStatus.innerText);
+  check('ec: venue splits (Manta home 1.33 / away 3.00)', Math.abs(ecManta.homeGpm - 4 / 3) < 1e-9 && Math.abs(ecManta.awayGpm - 3) < 1e-9, JSON.stringify({ h: ecManta.homeGpm, a: ecManta.awayGpm }));
+
+  // Insight + baselines with the restored extras.
+  const ecIns = JSON.parse(vm.runInContext(`JSON.stringify(fhInsightFor('Manta', 'overall'))`, sandbox));
+  check('ec: Manta insight (draw 40% / 0-scr 20% / 2+ 40% / CS 40% / 2H 1.40 / share 58.8%)', Math.abs(ecIns.drawPct - 40) < 1e-9 && Math.abs(ecIns.s0Pct - 20) < 1e-9 && Math.abs(ecIns.s2PlusPct - 40) < 1e-9 && Math.abs(ecIns.c0Pct - 40) < 1e-9 && Math.abs(ecIns.shOverall - 7 / 5) < 1e-9 && Math.abs(ecIns.share - 20 / 34 * 100) < 1e-9, JSON.stringify(ecIns));
+  check('ec: Manta HT lead 40% / trail 20%', ecIns.leadPct === 40 && ecIns.trailPct === 20, JSON.stringify({ l: ecIns.leadPct, t: ecIns.trailPct }));
+  const ecBase = JSON.parse(vm.runInContext(`JSON.stringify(fhLeagueBaselines)`, sandbox));
+  check('ec: baselines (FH 116/90, 2H 130/90, HT draws 42/90)', Math.abs(ecBase.fh - 116 / 90) < 1e-9 && Math.abs(ecBase.sh - 130 / 90) < 1e-9 && Math.abs(ecBase.htDraw - 42 / 90 * 100) < 1e-9, JSON.stringify(ecBase));
+  check('ec: render shows FH Insight + baseline + Fast starter tag', els.fhTableContent.innerHTML.includes('FH Insight') && els.fhTableContent.innerHTML.includes('League baseline: first half <strong>1.29</strong>') && els.fhTableContent.innerHTML.includes('second half <strong>1.44</strong>') && els.fhTableContent.innerHTML.includes('Fast starter'), els.fhTableContent.innerHTML.slice(0, 160));
+
+  // Fetch flow: authoritative reset — junk from a previous league must not survive.
+  vm.runInContext(`fhTableData = { overall: [{ pos: 1, team: 'Fake United', gp: 9, w: 5, d: 2, l: 2, gf: 9, ga: 9, gd: 0, pts: 17 }], home: [{ pos: 1, team: 'Fake United', gp: 5, w: 3, d: 1, l: 1, gf: 6, ga: 3, gd: 3, pts: 10 }], away: [], second: [], secondHome: [], secondAway: [] };
+    fhExtras = { dist: [{ team: 'Fake United', pct: true, s4: 0, s3: 0, s2: 0, s1: 0, s0: 100, c0: 0, c1: 0, c2: 0, c3: 0, c4: 0, sAvg: null, cAvg: null }], lead: [], trail: [], league: 'Fake League' };
+    shTableData = { overall: [{ pos: 1, team: 'Fake United', gp: 9, w: 5, d: 2, l: 2, gf: 9, ga: 9, gd: 0, pts: 17 }], home: [], away: [] };`, sandbox);
+  els.fhSsUrlInput.value = EC_URL;
+  let ecFetchCalls = [];
+  sandbox.fetch = async (u) => { ecFetchCalls.push(u); return { ok: true, status: 200, headers: { get: () => 'direct' }, text: async () => EC_FIXTURE, json: async () => ({}) }; };
+  await vm.runInContext('fetchSoccerstatsFH()', sandbox);
+  check('ec fetch: proxy called with URL + cache buster', ecFetchCalls.length === 1 && ecFetchCalls[0].startsWith('/api/soccerstats.js?url=' + encodeURIComponent(EC_URL) + '&_=') && ecFetchCalls[0].includes('ecuador%2Fliga-pro'), ecFetchCalls[0]);
+  check('ec fetch: Fake United wiped by authoritative reset', vm.runInContext('fhTableTeams.length === 16 && !fhTableTeams.some(t => t.team === "Fake United")', sandbox) === true, JSON.stringify(vm.runInContext('fhTableTeams.map(t => t.team)', sandbox)));
+  check('ec fetch: #1 is Delfin with correct FH data', JSON.parse(vm.runInContext('JSON.stringify(fhTableTeams[0])', sandbox)).team === 'Delfin', vm.runInContext('fhTableTeams[0].team', sandbox));
+  check('ec fetch: stale Fake League extras replaced', vm.runInContext('fhExtras.league === "Ecuador - Liga Pro" && fhExtras.dist.length === 16 && fhExtras.lead.length === 16 && fhExtras.trail.length === 16', sandbox) === true, vm.runInContext('fhExtras.league + " " + fhExtras.dist.length', sandbox));
+  check('ec fetch: status prefix lists six tables + extras', els.fhTableStatus.innerText.startsWith('Fetched from SoccerSTATS.com (via direct): Overall + Home + Away + 2H Overall + 2H Home + 2H Away table(s) \u00b7 16 HT scored/conceded rows \u00b7 16 HT lead records \u00b7 16 HT trail records.'), els.fhTableStatus.innerText.slice(0, 220));
+  check('ec fetch: URL saved to localStorage', sandbox.localStorage.getItem('techmari_fh_ss_url') === EC_URL, sandbox.localStorage.getItem('techmari_fh_ss_url'));
+
+  vm.runInContext('clearFHData()', sandbox);
+  els.fhLeagueInput.value = '';
 })().then(() => {
   console.log(failed === 0 ? '\nALL TESTS PASS' : `\n${failed} TEST(S) FAILED`);
   process.exit(failed === 0 ? 0 : 1);
