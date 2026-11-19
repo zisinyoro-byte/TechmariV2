@@ -9,8 +9,9 @@
  *   2. If blocked (403/429/503 or a Cloudflare challenge/block page), retry
  *      through the r.jina.ai reader, which renders the page from its own
  *      infrastructure and returns HTML (X-Return-Format: html).
- *      Optional: set JINA_API_KEY in the Vercel env vars for a reliable
- *      reader quota (anonymous reader calls can be rate-limited).
+ *      NOTE: since Nov 2026 jina rejects ANONYMOUS queries from datacenter IPs
+ *      (401 "bad IP reputation") — set JINA_API_KEY in the Vercel env vars for
+ *      the reader path to work at all.
  *   3. If both fail, return 502 — the app falls back to the manual paste box.
  *
  * Politeness: responses are cached at the edge for 10 min (stale-while-revalidate
@@ -73,6 +74,11 @@ export default async function handler(req, res) {
     if (since < MIN_REQUEST_INTERVAL) await delay(MIN_REQUEST_INTERVAL - since);
     lastRequestTime = Date.now();
 
+    // Track upstream outcomes so the 502 can say which leg failed and why.
+    let directStatus = 'network-error';
+    let readerStatus = 'network-error';
+    let readerAuthBlocked = false;
+
     // 1) Direct fetch
     try {
         const r = await fetchWithTimeout(parsed.href, {
@@ -82,6 +88,7 @@ export default async function handler(req, res) {
                 'Accept-Language': 'en-GB,en;q=0.9',
             },
         });
+        directStatus = r.status;
         const body = await r.text();
         if (r.ok && !isBlocked(r.status, body) && /<table/i.test(body)) {
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -99,7 +106,11 @@ export default async function handler(req, res) {
         const headers = { 'X-Return-Format': 'html', Accept: 'text/html' };
         if (process.env.JINA_API_KEY) headers.Authorization = 'Bearer ' + process.env.JINA_API_KEY;
         const r = await fetchWithTimeout('https://r.jina.ai/' + encodeURIComponent(parsed.href), { headers }, 30000);
+        readerStatus = r.status;
         const body = await r.text();
+        // jina now hard-blocks anonymous queries from datacenter IPs with a 401
+        // ("bad IP reputation ... Please authenticate") — only a key fixes that.
+        readerAuthBlocked = /AuthenticationRequiredError|bad IP reputation|Please authenticate/i.test(body.slice(0, 1000));
         if (r.ok && !isBlocked(r.status, body) && /<table/i.test(body)) {
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
             res.setHeader('X-Soccerstats-Via', 'reader');
@@ -111,8 +122,12 @@ export default async function handler(req, res) {
         console.warn('[soccerstats] reader fallback error:', e.message);
     }
 
+    const legs = `direct=${directStatus}, reader=${readerStatus}${readerAuthBlocked ? ' (auth required)' : ''}`;
+    const hint = readerAuthBlocked && !process.env.JINA_API_KEY
+        ? ' Hint: the jina.ai reader now rejects anonymous queries from server IPs — set JINA_API_KEY in the Vercel project environment variables and redeploy. Meanwhile, paste the tables manually (the paste box works exactly the same).'
+        : ' Open the page on soccerstats.com in your browser and paste the First Half tables manually — the paste box works exactly the same.';
     return res.status(502).json({
         error: 'soccerstats_unreachable',
-        detail: 'Both the direct fetch and the reader fallback failed. Open the page on soccerstats.com in your browser and paste the First Half tables manually — the paste box works exactly the same.',
+        detail: `Both the direct fetch and the reader fallback failed (${legs}).${hint}`,
     });
 }

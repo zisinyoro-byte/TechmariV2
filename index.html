@@ -838,6 +838,11 @@
                 </div>
             </div>
             <div id="fhSelectedMatchCard" style="margin-top:12px;"></div>
+            <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; justify-content:center; align-items:center;">
+                <button onclick="saveFHToArchive(false)" class="btn-export" style="flex:none; padding:8px 16px;">Save This Matchup to Archive</button>
+                <button onclick="saveFHToArchive(true)" class="btn-export" style="flex:none; padding:8px 16px;">Save All Listed (top 30)</button>
+                <span id="fhSaveStatus" style="font-size:12px; color:#6c757d;"></span>
+            </div>
             <div id="fhMatchupsPanel" class="hidden" style="margin-top: 18px;">
                 <div class="matchup-title">Upcoming: Expected First-Half Goals</div>
                 <div id="fhMatchupsContent"></div>
@@ -3491,6 +3496,119 @@
             }
             html += '</div>';
             card.innerHTML = html;
+        }
+
+        // ---- One-way save to the Neon archive (api/fh-save.js; analysed in analysis.html) ----
+        const FH_PARSER_VERSION = 'index.html FH pipeline, Nov 2026 layout';
+
+        function fhDateToIso(dateStr) {
+            if (!dateStr || dateStr === 'Unknown Date') return null;
+            let m = String(dateStr).match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+            if (m) return m[1] + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[3]).padStart(2, '0');
+            m = String(dateStr).match(/(\d{1,2})[\/.](\d{1,2})[\/.](\d{2,4})/);
+            if (m) { let y = parseInt(m[3]); if (y < 100) y += 2000; return y + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[1]).padStart(2, '0'); }
+            return null;
+        }
+
+        function fhMatchupPayload(e, fx) {
+            const h = e.home, a = e.away;
+            const hIns = fhInsightFor(h.team, 'home');
+            const aIns = fhInsightFor(a.team, 'away');
+            const leagueFH = fhLeagueBaselines.fh;
+            const hVenue = h.homeGpm !== null ? h.homeGpm : h.goalsPerMatch;
+            const aVenue = a.awayGpm !== null ? a.awayGpm : a.goalsPerMatch;
+            const verdicts = [];
+            if (hIns && hIns.share !== null && hIns.share >= 55) verdicts.push('Host fast starter');
+            if (aIns && aIns.share !== null && aIns.share >= 55) verdicts.push('Visitor fast starter');
+            if (hIns && hIns.share !== null && hIns.share <= 45) verdicts.push('Host second-half team');
+            if (aIns && aIns.share !== null && aIns.share <= 45) verdicts.push('Visitor second-half team');
+            if (hIns && aIns && hIns.drawPct !== null && aIns.drawPct !== null && hIns.drawPct >= 30 && aIns.drawPct >= 30) verdicts.push('HT draw angle');
+            if (leagueFH !== null && e.exp >= leagueFH * 1.4) verdicts.push('Well above league FH pace');
+            return {
+                match_date: fx ? fx.date : null,
+                round: fx ? fx.round : null,
+                league: fx && fx.league ? fx.league : fhLeague,
+                home_team: h.team, away_team: a.team,
+                exp_fh_goals: e.exp, confidence: e.confidence,
+                fh_match_flag: e.exp >= 1.5,
+                lean_note: e.exp >= 1.5 ? 'Over 0.5 FH / FH BTTS lean' : null,
+                host_fh_gpm_venue: hVenue, host_rate_source: h.homeGpm !== null ? 'Home table' : 'Overall fallback', host_venue_gp: h.homeGpm !== null ? h.homeGp : h.gp,
+                host_fh_gpm_overall: h.goalsPerMatch, host_hot: !!h.entertaining,
+                host_1h_share_pct: hIns ? hIns.share : null,
+                host_2h_gpm: hIns ? hIns.shVenue : null,
+                host_ht_draw_pct: hIns ? hIns.drawPct : null,
+                host_ht_lead_pct: hIns ? hIns.leadPct : null,
+                host_ht_trail_pct: hIns ? hIns.trailPct : null,
+                host_ht_scoreless_pct: hIns ? hIns.s0Pct : null,
+                host_ht_2plus_pct: hIns ? hIns.s2PlusPct : null,
+                host_ht_cs_pct: hIns ? hIns.c0Pct : null,
+                visitor_fh_gpm_venue: aVenue, visitor_rate_source: a.awayGpm !== null ? 'Away table' : 'Overall fallback', visitor_venue_gp: a.awayGpm !== null ? a.awayGp : a.gp,
+                visitor_fh_gpm_overall: a.goalsPerMatch, visitor_hot: !!a.entertaining,
+                visitor_1h_share_pct: aIns ? aIns.share : null,
+                visitor_2h_gpm: aIns ? aIns.shVenue : null,
+                visitor_ht_draw_pct: aIns ? aIns.drawPct : null,
+                visitor_ht_lead_pct: aIns ? aIns.leadPct : null,
+                visitor_ht_trail_pct: aIns ? aIns.trailPct : null,
+                visitor_ht_scoreless_pct: aIns ? aIns.s0Pct : null,
+                visitor_ht_2plus_pct: aIns ? aIns.s2PlusPct : null,
+                visitor_ht_cs_pct: aIns ? aIns.c0Pct : null,
+                league_fh_avg: leagueFH, league_2h_avg: fhLeagueBaselines.sh, league_ht_draw_pct: fhLeagueBaselines.htDraw,
+                splits_derived: fhSplitSource,
+                above_avg_detail: {
+                    host: { overall: leagueFH !== null && h.goalsPerMatch >= leagueFH, venue: leagueFH !== null && hVenue >= leagueFH },
+                    visitor: { overall: leagueFH !== null && a.goalsPerMatch >= leagueFH, venue: leagueFH !== null && aVenue >= leagueFH }
+                },
+                verdict_badges: verdicts,
+                extras: { hostInsight: hIns, visitorInsight: aIns }
+            };
+        }
+
+        function fhArchiveHeaders() {
+            const h = { 'Content-Type': 'application/json' };
+            const k = localStorage.getItem('fhArchiveKey');
+            if (k) h['x-archive-key'] = k;
+            return h;
+        }
+
+        async function saveFHToArchive(saveAll) {
+            const status = document.getElementById('fhSaveStatus');
+            const show = (msg, bad) => { if (status) { status.textContent = msg; status.style.color = bad ? '#dc3545' : '#28a745'; } };
+            if (!fhTableTeams || fhTableTeams.length === 0) { show('Process the FH table first — nothing to save.', true); return; }
+            const matchups = [];
+            if (saveAll) {
+                const list = getUpcomingFHMatchups(globalFixtures, todayUK()).slice(0, 30);
+                if (list.length === 0) { show('No upcoming fixtures to save.', true); return; }
+                list.forEach(f => { const e = expectedFHGoals(f.homeTeam, f.awayTeam); if (e) matchups.push(fhMatchupPayload(e, f)); });
+            } else {
+                const hSel = document.getElementById('fhHomeSelect');
+                const aSel = document.getElementById('fhAwaySelect');
+                const e = expectedFHGoals(hSel && hSel.value, aSel && aSel.value);
+                if (!e) { show('Select a home and away team from the FH table first.', true); return; }
+                matchups.push(fhMatchupPayload(e, findFHFixtureFor(e.home.team, e.away.team)));
+            }
+            const urlInput = document.getElementById('fhSsUrlInput');
+            const sourceUrl = urlInput ? String(urlInput.value || '').trim() : '';
+            const payload = {
+                snapshot: {
+                    league: fhLeague || 'Unknown',
+                    source_url: sourceUrl,
+                    source_type: sourceUrl ? 'soccerstats auto-fetch' : 'manual paste',
+                    source_date: fhDateToIso(todayUK()),
+                    table_counts: { overall: fhTableData.overall.length, home: fhTableData.home.length, away: fhTableData.away.length, second: fhTableData.second.length, secondHome: fhTableData.secondHome.length, secondAway: fhTableData.secondAway.length, htDist: fhExtras.dist.length, htLead: fhExtras.lead.length, htTrail: fhExtras.trail.length },
+                    baselines: { fh: fhLeagueBaselines.fh, sh: fhLeagueBaselines.sh, htDraw: fhLeagueBaselines.htDraw },
+                    parser_version: FH_PARSER_VERSION
+                },
+                matchups
+            };
+            show('Saving…');
+            try {
+                const res = await fetch('/api/fh-save', { method: 'POST', headers: fhArchiveHeaders(), body: JSON.stringify(payload) });
+                const j = await res.json().catch(() => ({}));
+                if (!res.ok) { show('Save failed: ' + (j.error || res.status) + (j.detail ? ' — ' + String(j.detail).slice(0, 120) : ''), true); return; }
+                show(`Stored ${j.stored} matchup${j.stored === 1 ? '' : 's'} in the archive (snapshot ${j.snapshot_id}); duplicates update the existing row.`);
+            } catch (err) {
+                show('Save failed: ' + err.message, true);
+            }
         }
 
         function clearFHData() {
