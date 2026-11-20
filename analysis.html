@@ -56,6 +56,7 @@
     <div class="row">
         <div class="ctrl"><label>League</label><select id="fLeague"><option value="">All leagues</option></select></div>
         <div class="ctrl"><label>Confidence</label><select id="fConf"><option value="">All</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select></div>
+        <div class="ctrl"><label>Week</label><select id="fWeek"><option value="">All weeks</option></select></div>
         <div class="ctrl"><label>From</label><input type="date" id="fFrom"></div>
         <div class="ctrl"><label>To</label><input type="date" id="fTo"></div>
         <div class="ctrl"><label>Status</label><select id="fSettled"><option value="">All</option><option value="yes">Settled</option><option value="no">Unsettled</option></select></div>
@@ -77,6 +78,8 @@
         <div class="card"><div class="lbl">Bet vs line</div><div class="val" id="tBet">—</div><div class="sub" id="tBetSub">W–L–V of settled</div></div>
         <div class="card"><div class="lbl">Manual result</div><div class="val" id="tManual">—</div><div class="sub">W–L–V</div></div>
         <div class="card"><div class="lbl">Avg expected vs actual</div><div class="val" id="tAvg">—</div><div class="sub">FH goals, settled</div></div>
+        <div class="card"><div class="lbl">FS·B hit — Over 0.5 FH</div><div class="val" id="tFsB">—</div><div class="sub" id="tFsSub">by fast-starter side</div></div>
+        <div class="card"><div class="lbl">Bet rate trend</div><div class="val" id="tTrend">—</div><div class="sub" id="tTrendSub">last 6 weeks</div></div>
         <div class="card"><div class="lbl">Rows shown</div><div class="val" id="tCount">0</div><div class="sub" id="tCountSub">of 0 loaded</div></div>
     </div>
 
@@ -150,6 +153,7 @@
             if (!res.ok) { st.textContent = 'Load failed: ' + (j.error || res.status) + (j.detail ? ' — ' + j.detail : ''); return; }
             ROWS = j.rows || [];
             rebuildLeagueFilter();
+            rebuildWeekFilter();
             st.textContent = `Loaded ${ROWS.length} rows.`;
             render();
         } catch (e) {
@@ -165,9 +169,25 @@
         if (leagues.includes(cur)) sel.value = cur;
     }
 
+    // Stable week key for a row: "2026-W47" (from the batch date).
+    function weekKey(r) {
+        const wk = isoWeek(r.source_date || r.match_date_iso);
+        return wk ? wk.year + '-W' + String(wk.week).padStart(2, '0') : null;
+    }
+
+    function rebuildWeekFilter() {
+        const sel = document.getElementById('fWeek');
+        const cur = sel.value;
+        const weeks = [...new Set(ROWS.map(weekKey).filter(Boolean))].sort().reverse();
+        sel.innerHTML = '<option value="">All weeks</option>' +
+            weeks.map(w => `<option value="${w}">W${w.slice(6)} · ${w.slice(0, 4)}</option>`).join('');
+        if (weeks.includes(cur)) sel.value = cur;
+    }
+
     function filtered() {
         const lg = document.getElementById('fLeague').value;
         const cf = document.getElementById('fConf').value;
+        const wkSel = document.getElementById('fWeek').value;
         const from = document.getElementById('fFrom').value;
         const to = document.getElementById('fTo').value;
         const st = document.getElementById('fSettled').value;
@@ -176,6 +196,7 @@
         return ROWS.filter(r => {
             if (lg && r.league !== lg) return false;
             if (cf && r.confidence !== cf) return false;
+            if (wkSel && weekKey(r) !== wkSel) return false;
             if (from && (!r.match_date_iso || r.match_date_iso < from)) return false;
             if (to && (!r.match_date_iso || r.match_date_iso > to)) return false;
             if (st === 'yes' && !r.settled_at) return false;
@@ -312,6 +333,44 @@
         document.getElementById('tManual').textContent = mw || ml || mv ? `${mw}–${ml}–${mv}` : '—';
         document.getElementById('tBet').textContent = rate(bw, bl);
         document.getElementById('tBetSub').innerHTML = `${bw}W–${bl}L–${bv}V (voids excluded)${unitsTxt}<br>${confSplit('result_bet')}`;
+        // FS-variant split of Over 0.5 FH: FS·B (both), FS·H (home only), FS·V (visitor only).
+        const fs = { B: [0, 0], H: [0, 0], V: [0, 0] };
+        rows.forEach(r => {
+            if (r.result_over05 !== 'WIN' && r.result_over05 !== 'LOSS') return;
+            const h = r.host_fast_starter === true, v = r.visitor_fast_starter === true;
+            const k = h && v ? 'B' : (h ? 'H' : (v ? 'V' : null));
+            if (k) fs[k][r.result_over05 === 'WIN' ? 0 : 1]++;
+        });
+        document.getElementById('tFsB').textContent = rate(fs.B[0], fs.B[1]);
+        document.getElementById('tFsSub').innerHTML =
+            `H ${rate(fs.H[0], fs.H[1])} · V ${rate(fs.V[0], fs.V[1])}<br>` +
+            `B ${fs.B[0]}–${fs.B[1]} · H ${fs.H[0]}–${fs.H[1]} · V ${fs.V[0]}–${fs.V[1]} (W–L)`;
+        // Week-over-week bet hit rate, last 6 weeks with settled bets, as a sparkline.
+        const byWeek = {};
+        rows.forEach(r => {
+            if (r.result_bet !== 'WIN' && r.result_bet !== 'LOSS') return;
+            const k = weekKey(r);
+            if (!k) return;
+            if (!byWeek[k]) byWeek[k] = { w: 0, l: 0 };
+            byWeek[k][r.result_bet === 'WIN' ? 'w' : 'l']++;
+        });
+        const wks = Object.keys(byWeek).sort().slice(-6);
+        if (wks.length) {
+            const pts = wks.map(k => {
+                const b = byWeek[k];
+                return { wk: 'W' + k.slice(6), rate: Math.round(100 * b.w / (b.w + b.l)) };
+            });
+            const xy = i => [5 + i * 90 / Math.max(pts.length - 1, 1), 27 - pts[i].rate / 100 * 24];
+            document.getElementById('tTrend').innerHTML =
+                `<svg viewBox="0 0 100 30" preserveAspectRatio="none" style="width:100%; height:34px; margin-top:6px;" aria-label="Bet hit-rate trend">` +
+                `<polyline points="${pts.map((p, i) => xy(i).map(n => n.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2"/>` +
+                pts.map((p, i) => { const [x, y] = xy(i); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.2" fill="${i === pts.length - 1 ? 'var(--accent)' : 'var(--mut)'}"/>`; }).join('') +
+                `</svg>`;
+            document.getElementById('tTrendSub').textContent = pts.map(p => `${p.wk} ${p.rate}%`).join(' · ');
+        } else {
+            document.getElementById('tTrend').textContent = '—';
+            document.getElementById('tTrendSub').textContent = 'needs settled bets';
+        }
         if (settled.length) {
             const ea = settled.reduce((s, r) => s + Number(r.exp_fh_goals || 0), 0) / settled.length;
             const aa = settled.reduce((s, r) => s + (r.actual_fh_home + r.actual_fh_away), 0) / settled.length;
@@ -417,7 +476,7 @@
         }
     }
 
-    ['fLeague', 'fConf', 'fFrom', 'fTo', 'fSettled', 'fFast', 'fAbove'].forEach(id =>
+    ['fLeague', 'fConf', 'fWeek', 'fFrom', 'fTo', 'fSettled', 'fFast', 'fAbove'].forEach(id =>
         document.getElementById(id).addEventListener('change', render));
 
     loadArchive();
