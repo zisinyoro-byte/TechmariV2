@@ -6,7 +6,10 @@
  * a WIN/LOSS/VOID override for any other market.
  * Sending no scores and no manual result clears the settlement (un-settle).
  *
- * Body: { id, actual_fh_home?, actual_fh_away?, result_manual?, bet_line?, bet_market?, odds?, notes? }
+ * Body: { id, actual_fh_home?, actual_fh_away?, actual_ft_home?, actual_ft_away?,
+ *         result_manual?, bet_line?, bet_market?, odds?, notes? }
+ * FT scores are record-only: they never influence results. Sent alone they
+ * update the record without touching the settlement.
  */
 
 export const config = { runtime: 'nodejs' };
@@ -39,11 +42,16 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'bet_market must be FH_OVER or FH_BTTS' });
   }
   const oddsIn = numOrNull(body.odds, 1.01, 100);
+  const fth = intOrNull(body.actual_ft_home, 0, 20);
+  const fta = intOrNull(body.actual_ft_away, 0, 20);
 
   const hasScores = h !== null || a !== null;
+  const hasFT = fth !== null || fta !== null;
   // Clear only when the request carries nothing at all (the Clear button sends { id }).
   // A bet_line or odds edit alone is an update intent: it re-settles with preserved scores.
-  const clearing = !hasScores && manual === null && lineIn === null && oddsIn === null;
+  // FT scores entered alone are a pure record update: stored, settlement untouched.
+  const clearing = !hasScores && !hasFT && manual === null && lineIn === null && oddsIn === null;
+  const ftOnly = hasFT && !hasScores && manual === null && lineIn === null && oddsIn === null;
 
   let row;
   try {
@@ -52,19 +60,34 @@ export default async function handler(req, res) {
       const rows = await sqlExec(conn, `
         UPDATE fh_matchups SET
           actual_fh_home = NULL, actual_fh_away = NULL,
+          actual_ft_home = NULL, actual_ft_away = NULL,
           result_over05 = NULL, result_fh_btts = NULL, result_manual = NULL,
           result_bet = NULL,
           settled_at = NULL, updated_at = now()
         WHERE id = $1
         RETURNING id, home_team, away_team, exp_fh_goals, confidence, bet_line, bet_market, result_bet, odds,
-                  actual_fh_home, actual_fh_away, result_over05, result_fh_btts,
-                  result_manual, settled_at, notes
+                  actual_fh_home, actual_fh_away, actual_ft_home, actual_ft_away,
+                  result_over05, result_fh_btts, result_manual, settled_at, notes
       `, [id]);
       row = rows[0];
+    } else if (ftOnly) {
+      // Record-only FT update: never touches results or settled_at.
+      const rows = await sqlExec(conn, `
+        UPDATE fh_matchups SET
+          actual_ft_home = COALESCE($2, actual_ft_home),
+          actual_ft_away = COALESCE($3, actual_ft_away),
+          updated_at = now()
+        WHERE id = $1
+        RETURNING id, home_team, away_team, exp_fh_goals, confidence, bet_line, bet_market, result_bet, odds,
+                  actual_fh_home, actual_fh_away, actual_ft_home, actual_ft_away,
+                  result_over05, result_fh_btts, result_manual, settled_at, notes
+      `, [id, fth, fta]);
+      if (!rows.length) return res.status(404).json({ error: `Matchup id ${id} not found` });
+      return res.status(200).json({ ok: true, row: rows[0], cleared: false });
     } else {
       // Merge with what is already stored so a manual-result-only update
       // never wipes a previously entered half-time score.
-      const cur = await sqlExec(conn, 'SELECT actual_fh_home, actual_fh_away, bet_line, bet_market FROM fh_matchups WHERE id = $1', [id]);
+      const cur = await sqlExec(conn, 'SELECT actual_fh_home, actual_fh_away, actual_ft_home, actual_ft_away, bet_line, bet_market FROM fh_matchups WHERE id = $1', [id]);
       if (!cur.length) return res.status(404).json({ error: `Matchup id ${id} not found` });
       const hF = h !== null ? h : numOrNull(cur[0].actual_fh_home, 0, 20);
       const aF = a !== null ? a : numOrNull(cur[0].actual_fh_away, 0, 20);
@@ -80,22 +103,25 @@ export default async function handler(req, res) {
         if (market === 'FH_BTTS') bet = (hF >= 1 && aF >= 1) ? 'WIN' : 'LOSS';
         else bet = (hF + aF > line) ? 'WIN' : (hF + aF < line ? 'LOSS' : (Number.isInteger(line) ? 'VOID' : 'LOSS'));
       }
+      const fthF = fth !== null ? fth : numOrNull(cur[0].actual_ft_home, 0, 20);
+      const ftaF = fta !== null ? fta : numOrNull(cur[0].actual_ft_away, 0, 20);
       const rows = await sqlExec(conn, `
         UPDATE fh_matchups SET
           actual_fh_home = $2, actual_fh_away = $3,
-          result_over05 = $4, result_fh_btts = $5,
-          result_manual = $6,
-          result_bet = $7,
-          bet_line = COALESCE($8, bet_line),
-          bet_market = $9,
-          notes = COALESCE($10, notes),
-          odds = COALESCE($11, odds),
+          actual_ft_home = $4, actual_ft_away = $5,
+          result_over05 = $6, result_fh_btts = $7,
+          result_manual = $8,
+          result_bet = $9,
+          bet_line = COALESCE($10, bet_line),
+          bet_market = $11,
+          notes = COALESCE($12, notes),
+          odds = COALESCE($13, odds),
           settled_at = now(), updated_at = now()
         WHERE id = $1
         RETURNING id, home_team, away_team, exp_fh_goals, confidence, bet_line, bet_market, result_bet, odds,
-                  actual_fh_home, actual_fh_away, result_over05, result_fh_btts,
-                  result_manual, settled_at, notes
-      `, [id, hF, aF, over05, btts, manual === null ? null : manual.toUpperCase(), bet,
+                  actual_fh_home, actual_fh_away, actual_ft_home, actual_ft_away,
+                  result_over05, result_fh_btts, result_manual, settled_at, notes
+      `, [id, hF, aF, fthF, ftaF, over05, btts, manual === null ? null : manual.toUpperCase(), bet,
           lineIn, market, notes, oddsIn]);
       row = rows[0];
     }

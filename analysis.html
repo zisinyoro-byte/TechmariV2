@@ -89,7 +89,7 @@
                 <tr>
                     <th>Date</th><th>Match</th><th>Exp FHG</th><th>Conf</th>
                     <th>Flags</th><th>Host / Visitor rates</th>
-                    <th>Line</th><th>Odds</th><th>HT score</th><th>Results</th><th>Bet</th><th>Manual</th><th>Notes</th><th></th>
+                    <th>Line</th><th>Odds</th><th>HT score</th><th>FT score</th><th>Results</th><th>Bet</th><th>Manual</th><th>Notes</th><th></th>
                 </tr>
             </thead>
             <tbody id="tbody"></tbody>
@@ -250,6 +250,10 @@
                     <input type="number" min="0" max="20" value="${r.actual_fh_home === null || r.actual_fh_home === undefined ? '' : r.actual_fh_home}" aria-label="Home HT goals"> :
                     <input type="number" min="0" max="20" value="${r.actual_fh_away === null || r.actual_fh_away === undefined ? '' : r.actual_fh_away}" aria-label="Away HT goals">
                 </td>
+                <td>
+                    <input type="number" min="0" max="20" value="${r.actual_ft_home === null || r.actual_ft_home === undefined ? '' : r.actual_ft_home}" aria-label="Home FT goals"> :
+                    <input type="number" min="0" max="20" value="${r.actual_ft_away === null || r.actual_ft_away === undefined ? '' : r.actual_ft_away}" aria-label="Away FT goals">
+                </td>
                 <td>${chipOf(r.result_over05)}${chipOf(r.result_fh_btts)}${expBar(r)}</td>
                 <td>${chipOf(r.result_bet)}</td>
                 <td>
@@ -289,7 +293,7 @@
             if (key !== curKey) {
                 curKey = key;
                 const label = (r.round ? 'Round ' + esc(r.round) : 'No round') + (r.league ? ' — ' + esc(r.league) : '');
-                html += `<tr class="divider"><td colspan="14">${label}</td></tr>`;
+                html += `<tr class="divider"><td colspan="15">${label}</td></tr>`;
             }
             html += rowHtml(r);
         }
@@ -391,6 +395,8 @@
             odds: nums[1].value === '' ? null : Number(nums[1].value),
             actual_fh_home: nums[2].value === '' ? null : Number(nums[2].value),
             actual_fh_away: nums[3].value === '' ? null : Number(nums[3].value),
+            actual_ft_home: nums[4].value === '' ? null : Number(nums[4].value),
+            actual_ft_away: nums[5].value === '' ? null : Number(nums[5].value),
             result_manual: manual,
             notes
         };
@@ -405,8 +411,10 @@
         const st = document.getElementById('status');
         const body = rowInputs(id);
         const hasScores = body.actual_fh_home !== null || body.actual_fh_away !== null;
-        if (!hasScores && !body.result_manual) { st.textContent = 'Enter a half-time score or pick a manual result first.'; return; }
+        const hasFT = body.actual_ft_home !== null || body.actual_ft_away !== null;
+        if (!hasScores && !hasFT && !body.result_manual) { st.textContent = 'Enter a half-time score, full-time score, or pick a manual result first.'; return; }
         if (hasScores && (body.actual_fh_home === null || body.actual_fh_away === null)) { st.textContent = 'Enter both half-time scores.'; return; }
+        if (hasFT && (body.actual_ft_home === null || body.actual_ft_away === null)) { st.textContent = 'Enter both full-time scores.'; return; }
         try {
             const res = await fetch('/api/fh-settle', { method: 'POST', headers: headers(), body: JSON.stringify(body) });
             const j = await res.json().catch(() => ({}));

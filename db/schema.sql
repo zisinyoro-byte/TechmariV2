@@ -89,6 +89,8 @@ CREATE TABLE IF NOT EXISTS fh_matchups (
   -- Post-match results (filled from analysis.html after the games)
   actual_fh_home  INTEGER,                   -- half-time home goals
   actual_fh_away  INTEGER,                   -- half-time away goals
+  actual_ft_home  INTEGER,                   -- full-time home goals (record only, no result logic)
+  actual_ft_away  INTEGER,                   -- full-time away goals (record only, no result logic)
   result_over05   TEXT,                      -- WIN | LOSS (auto from actual scores)
   result_fh_btts  TEXT,                      -- WIN | LOSS (auto from actual scores)
   result_manual   TEXT,                      -- WIN | LOSS | VOID (optional override)
