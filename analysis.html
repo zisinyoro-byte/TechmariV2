@@ -37,6 +37,10 @@
         .chip.void { background:rgba(108,117,125,0.14); color:var(--mut); }
         .chip.flag { background:rgba(232,62,140,0.10); color:var(--accent); }
         .muted { color:var(--mut); }
+        tr.divider td { background:var(--bg); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--mut); font-weight:700; padding:5px 10px; }
+        .expbar { position:relative; display:inline-block; width:64px; height:8px; background:rgba(108,117,125,0.18); border-radius:4px; vertical-align:middle; margin-right:6px; }
+        .expbar .act { position:absolute; left:0; top:0; bottom:0; border-radius:4px; }
+        .expbar .exp { position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--ink); }
         #status { font-size:0.82rem; color:var(--mut); margin:6px 0 0; }
         .hidden { display:none; }
         .empty { padding:26px; text-align:center; color:var(--mut); font-size:0.9rem; }
@@ -46,7 +50,7 @@
 <body>
 <header>
     <h1>FH Archive — Post-Match Analysis</h1>
-    <p>Standalone page. Reads only the Neon archive via /api/fh-archive and settles results via /api/fh-settle — no connection to the prediction logic in the main app.</p>
+    <p>Standalone page. Reads the Neon archive via /api/fh-archive, settles via /api/fh-settle, deletes rows via /api/fh-delete — no connection to the prediction logic in the main app.</p>
 </header>
 <main>
     <div class="row">
@@ -62,6 +66,7 @@
             </div>
         </div>
         <button class="ghost" onclick="loadArchive()">Reload</button>
+        <button onclick="settleAllScored()">Settle all scored</button>
         <button class="ghost" onclick="promptKey()">Archive key…</button>
         <a class="ghost" href="index.html" style="text-decoration:none; display:inline-flex; align-items:center;">← Back to App</a>
     </div>
@@ -81,7 +86,7 @@
                 <tr>
                     <th>Date</th><th>League</th><th>Match</th><th>Exp FHG</th><th>Conf</th>
                     <th>Flags</th><th>Host / Visitor rates</th>
-                    <th>Line</th><th>HT score</th><th>Results</th><th>Bet</th><th>Manual</th><th>Notes</th><th></th>
+                    <th>Line</th><th>Odds</th><th>HT score</th><th>Results</th><th>Bet</th><th>Manual</th><th>Notes</th><th></th>
                 </tr>
             </thead>
             <tbody id="tbody"></tbody>
@@ -168,28 +173,44 @@
         return '<span class="muted">—</span>';
     }
 
-    function render() {
-        const rows = filtered();
-        const tb = document.getElementById('tbody');
-        document.getElementById('empty').classList.toggle('hidden', rows.length > 0);
-        document.getElementById('tCount').textContent = rows.length;
-        document.getElementById('tCountSub').textContent = 'of ' + ROWS.length + ' loaded';
+    function fsChip(r) {
+        const h = r.host_fast_starter === true, v = r.visitor_fast_starter === true;
+        if (h && v) return '<span class="chip flag" title="Fast starters: both">FS·B</span>';
+        if (h) return '<span class="chip flag" title="Fast starters: home only">FS·H</span>';
+        if (v) return '<span class="chip flag" title="Fast starters: visitor only">FS·V</span>';
+        return '';
+    }
 
-        tb.innerHTML = rows.map(r => `
+    function expBar(r) {
+        if (r.actual_fh_home === null || r.actual_fh_home === undefined ||
+            r.actual_fh_away === null || r.actual_fh_away === undefined) return '';
+        const act = r.actual_fh_home + r.actual_fh_away;
+        const exp = Number(r.exp_fh_goals || 0);
+        const w = Math.min(act / 4, 1) * 100, m = Math.min(exp / 4, 1) * 100;
+        const col = act > exp ? 'var(--ok)' : (act < exp ? 'var(--bad)' : 'var(--mut)');
+        return `<span class="expbar" title="Actual ${act} FH goals vs expected ${num(exp)}">` +
+            `<span class="act" style="width:${w}%; background:${col};"></span>` +
+            `<span class="exp" style="left:${m}%;"></span></span>` +
+            `<span style="font-size:0.72rem;color:var(--mut)">${num(exp)}→${act}</span>`;
+    }
+
+    function rowHtml(r) {
+        return `
             <tr data-id="${r.id}">
                 <td>${esc(r.match_date || r.match_date_iso || '—')}</td>
                 <td>${esc(r.league || '—')}</td>
                 <td class="wrap"><strong>${esc(r.home_team)}</strong> vs <strong>${esc(r.away_team)}</strong></td>
                 <td><strong style="color:var(--accent)">${num(r.exp_fh_goals)}</strong></td>
                 <td>${esc(r.confidence || '')}</td>
-                <td>${flag('FS', r.host_fast_starter && r.visitor_fast_starter)}${flag('AVG', r.host_above_avg && r.visitor_above_avg)}${flag('HOT', r.fh_match_flag)}</td>
+                <td>${fsChip(r)}${flag('AVG', r.host_above_avg && r.visitor_above_avg)}${flag('HOT', r.fh_match_flag)}</td>
                 <td>${num(r.host_fh_gpm_venue)} / ${num(r.visitor_fh_gpm_venue)}</td>
                 <td><input type="number" step="0.5" min="0" max="15" style="width:64px" value="${r.bet_line === null || r.bet_line === undefined ? '' : r.bet_line}" aria-label="Bet line (FH goals)"></td>
+                <td><input type="number" step="0.01" min="1.01" max="100" style="width:60px" value="${r.odds === null || r.odds === undefined ? '' : r.odds}" aria-label="Decimal odds"></td>
                 <td>
                     <input type="number" min="0" max="20" value="${r.actual_fh_home === null || r.actual_fh_home === undefined ? '' : r.actual_fh_home}" aria-label="Home HT goals"> :
                     <input type="number" min="0" max="20" value="${r.actual_fh_away === null || r.actual_fh_away === undefined ? '' : r.actual_fh_away}" aria-label="Away HT goals">
                 </td>
-                <td>${chipOf(r.result_over05)}${chipOf(r.result_fh_btts)}</td>
+                <td>${chipOf(r.result_over05)}${chipOf(r.result_fh_btts)}${expBar(r)}</td>
                 <td>${chipOf(r.result_bet)}</td>
                 <td>
                     <select aria-label="Manual result">
@@ -201,15 +222,45 @@
                 <td style="white-space:nowrap;">
                     <button class="mini" onclick="settle(${r.id})">Settle</button>
                     <button class="mini ghost" onclick="unsettle(${r.id})">Clear</button>
+                    <button class="mini ghost" onclick="deleteRow(${r.id})">Del</button>
                 </td>
             </tr>
-        `).join('');
+        `;
+    }
+
+    function render() {
+        const rows = filtered();
+        const tb = document.getElementById('tbody');
+        document.getElementById('empty').classList.toggle('hidden', rows.length > 0);
+        document.getElementById('tCount').textContent = rows.length;
+        document.getElementById('tCountSub').textContent = 'of ' + ROWS.length + ' loaded';
+
+        // Group by league + round so a matchday reads as one block.
+        const sorted = [...rows].sort((a, b) => {
+            const ka = (a.league || '—') + '|' + (a.round || ''), kb = (b.league || '—') + '|' + (b.round || '');
+            if (ka !== kb) return ka < kb ? -1 : 1;
+            const da = a.match_date_iso || '', db = b.match_date_iso || '';
+            if (da !== db) return da < db ? -1 : 1;
+            return (a.id || 0) - (b.id || 0);
+        });
+        let html = '', curKey = null;
+        for (const r of sorted) {
+            const key = (r.league || '—') + '|' + (r.round || '');
+            if (key !== curKey) {
+                curKey = key;
+                const label = (r.round ? 'Round ' + esc(r.round) : 'No round') + (r.league ? ' — ' + esc(r.league) : '');
+                html += `<tr class="divider"><td colspan="15">${label}</td></tr>`;
+            }
+            html += rowHtml(r);
+        }
+        tb.innerHTML = html;
 
         tally(rows);
     }
 
     function tally(rows) {
-        const settled = rows.filter(r => r.actual_fh_home !== null && r.actual_fh_away !== null);
+        const settled = rows.filter(r => r.actual_fh_home !== null && r.actual_fh_home !== undefined &&
+                                        r.actual_fh_away !== null && r.actual_fh_away !== undefined);
         const w1 = settled.filter(r => r.result_over05 === 'WIN').length;
         const l1 = settled.filter(r => r.result_over05 === 'LOSS').length;
         const w2 = settled.filter(r => r.result_fh_btts === 'WIN').length;
@@ -221,13 +272,27 @@
         const bl = rows.filter(r => r.result_bet === 'LOSS').length;
         const bv = rows.filter(r => r.result_bet === 'VOID').length;
         const rate = (w, l) => (w + l) > 0 ? Math.round(100 * w / (w + l)) + '%' : '—';
+        // Per-confidence split (HIGH/MEDIUM/LOW) for a result field.
+        const confSplit = key => ['HIGH', 'MEDIUM', 'LOW'].map(c => {
+            const rs = rows.filter(r => String(r.confidence || '').toUpperCase() === c);
+            const w = rs.filter(r => r[key] === 'WIN').length;
+            const l = rs.filter(r => r[key] === 'LOSS').length;
+            return c.slice(0, 1) + ' ' + rate(w, l);
+        }).join(' · ');
+        // Profit tracking: WIN pays (odds-1), LOSS costs 1 unit; voids excluded.
+        const withOdds = rows.filter(r => r.odds !== null && r.odds !== undefined &&
+                                         (r.result_bet === 'WIN' || r.result_bet === 'LOSS'));
+        const units = withOdds.reduce((s, r) => s + (r.result_bet === 'WIN' ? Number(r.odds) - 1 : -1), 0);
+        const unitsTxt = withOdds.length
+            ? ` · ${units >= 0 ? '+' : ''}${Math.round(units * 100) / 100}u (ROI ${Math.round(100 * units / withOdds.length)}%)`
+            : '';
         document.getElementById('tOver').textContent = rate(w1, l1);
-        document.getElementById('tOverSub').textContent = `${w1}W–${l1}L of ${settled.length} settled`;
+        document.getElementById('tOverSub').innerHTML = `${w1}W–${l1}L of ${settled.length} settled<br>${confSplit('result_over05')}`;
         document.getElementById('tBtts').textContent = rate(w2, l2);
-        document.getElementById('tBttsSub').textContent = `${w2}W–${l2}L of ${settled.length} settled`;
+        document.getElementById('tBttsSub').innerHTML = `${w2}W–${l2}L of ${settled.length} settled<br>${confSplit('result_fh_btts')}`;
         document.getElementById('tManual').textContent = mw || ml || mv ? `${mw}–${ml}–${mv}` : '—';
         document.getElementById('tBet').textContent = rate(bw, bl);
-        document.getElementById('tBetSub').textContent = `${bw}W–${bl}L–${bv}V of settled (voids excluded)`;
+        document.getElementById('tBetSub').innerHTML = `${bw}W–${bl}L–${bv}V (voids excluded)${unitsTxt}<br>${confSplit('result_bet')}`;
         if (settled.length) {
             const ea = settled.reduce((s, r) => s + Number(r.exp_fh_goals || 0), 0) / settled.length;
             const aa = settled.reduce((s, r) => s + (r.actual_fh_home + r.actual_fh_away), 0) / settled.length;
@@ -244,9 +309,10 @@
         const notes = tr.querySelector('input[type=text]').value;
         return {
             id,
-            actual_fh_home: nums[0].value === '' ? null : Number(nums[0].value),
-            actual_fh_away: nums[1].value === '' ? null : Number(nums[1].value),
-            bet_line: nums[2].value === '' ? null : Number(nums[2].value),
+            bet_line: nums[0].value === '' ? null : Number(nums[0].value),
+            odds: nums[1].value === '' ? null : Number(nums[1].value),
+            actual_fh_home: nums[2].value === '' ? null : Number(nums[2].value),
+            actual_fh_away: nums[3].value === '' ? null : Number(nums[3].value),
             result_manual: manual,
             notes
         };
@@ -291,6 +357,44 @@
             render();
         } catch (e) {
             st.textContent = 'Clear failed: ' + e.message;
+        }
+    }
+
+    async function settleAllScored() {
+        const st = document.getElementById('status');
+        // Every visible row with both half-time scores typed in (line/odds are nums[0]/[1], scores nums[2]/[3]).
+        const targets = filtered().filter(r => {
+            const tr = document.querySelector(`tr[data-id="${r.id}"]`);
+            if (!tr) return false;
+            const n = tr.querySelectorAll('input[type=number]');
+            return n[2].value !== '' && n[3].value !== '';
+        });
+        if (!targets.length) { st.textContent = 'No rows with both half-time scores entered.'; return; }
+        let ok = 0, fail = 0;
+        for (const r of targets) {
+            try {
+                const res = await fetch('/api/fh-settle', { method: 'POST', headers: headers(), body: JSON.stringify(rowInputs(r.id)) });
+                if (res.ok) { const j = await res.json().catch(() => ({})); if (j.row) applyRow(j.row); ok++; } else fail++;
+            } catch (_) { fail++; }
+        }
+        st.textContent = `Bulk settle: ${ok} settled${fail ? `, ${fail} failed` : ''}.`;
+        render();
+    }
+
+    async function deleteRow(id) {
+        const st = document.getElementById('status');
+        const r = ROWS.find(x => x.id === id);
+        const name = r ? `${r.home_team} vs ${r.away_team}` : 'this row';
+        if (!confirm(`Delete ${name} from the archive? This cannot be undone.`)) return;
+        try {
+            const res = await fetch('/api/fh-delete', { method: 'POST', headers: headers(), body: JSON.stringify({ id }) });
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok) { st.textContent = 'Delete failed: ' + (j.error || res.status); return; }
+            ROWS = ROWS.filter(x => x.id !== id);
+            st.textContent = `Deleted ${name}.`;
+            render();
+        } catch (e) {
+            st.textContent = 'Delete failed: ' + e.message;
         }
     }
 

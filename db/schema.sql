@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS fh_matchups (
   bet_line        REAL,                      -- e.g. 1.5 = Over 1.5 first-half goals; integer lines push (VOID) on exact hits
   bet_market      TEXT    NOT NULL DEFAULT 'FH_OVER',  -- FH_OVER (vs bet_line) | FH_BTTS
   result_bet      TEXT,                      -- WIN | LOSS | VOID (auto from actual scores vs line)
+  odds            REAL,                      -- decimal odds of the bet (1.01+); profit = odds-1 on WIN, -1 on LOSS
 
   -- Post-match results (filled from analysis.html after the games)
   actual_fh_home  INTEGER,                   -- half-time home goals

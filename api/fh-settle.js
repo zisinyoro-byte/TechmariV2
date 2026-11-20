@@ -6,7 +6,7 @@
  * a WIN/LOSS/VOID override for any other market.
  * Sending no scores and no manual result clears the settlement (un-settle).
  *
- * Body: { id, actual_fh_home, actual_fh_away, result_manual?, notes? }
+ * Body: { id, actual_fh_home?, actual_fh_away?, result_manual?, bet_line?, bet_market?, odds?, notes? }
  */
 
 export const config = { runtime: 'nodejs' };
@@ -38,11 +38,12 @@ export default async function handler(req, res) {
   if (marketIn !== null && !['FH_OVER', 'FH_BTTS'].includes(marketIn.toUpperCase())) {
     return res.status(400).json({ error: 'bet_market must be FH_OVER or FH_BTTS' });
   }
+  const oddsIn = numOrNull(body.odds, 1.01, 100);
 
   const hasScores = h !== null || a !== null;
   // Clear only when the request carries nothing at all (the Clear button sends { id }).
-  // A bet_line edit alone is an update intent: it re-settles with preserved scores.
-  const clearing = !hasScores && manual === null && lineIn === null;
+  // A bet_line or odds edit alone is an update intent: it re-settles with preserved scores.
+  const clearing = !hasScores && manual === null && lineIn === null && oddsIn === null;
 
   let row;
   try {
@@ -55,7 +56,7 @@ export default async function handler(req, res) {
           result_bet = NULL,
           settled_at = NULL, updated_at = now()
         WHERE id = $1
-        RETURNING id, home_team, away_team, exp_fh_goals, confidence, bet_line, bet_market, result_bet,
+        RETURNING id, home_team, away_team, exp_fh_goals, confidence, bet_line, bet_market, result_bet, odds,
                   actual_fh_home, actual_fh_away, result_over05, result_fh_btts,
                   result_manual, settled_at, notes
       `, [id]);
@@ -88,13 +89,14 @@ export default async function handler(req, res) {
           bet_line = COALESCE($8, bet_line),
           bet_market = $9,
           notes = COALESCE($10, notes),
+          odds = COALESCE($11, odds),
           settled_at = now(), updated_at = now()
         WHERE id = $1
-        RETURNING id, home_team, away_team, exp_fh_goals, confidence, bet_line, bet_market, result_bet,
+        RETURNING id, home_team, away_team, exp_fh_goals, confidence, bet_line, bet_market, result_bet, odds,
                   actual_fh_home, actual_fh_away, result_over05, result_fh_btts,
                   result_manual, settled_at, notes
       `, [id, hF, aF, over05, btts, manual === null ? null : manual.toUpperCase(), bet,
-          lineIn, market, notes]);
+          lineIn, market, notes, oddsIn]);
       row = rows[0];
     }
   } catch (e) {
