@@ -84,7 +84,7 @@
         <table>
             <thead>
                 <tr>
-                    <th>Date</th><th>League</th><th>Match</th><th>Exp FHG</th><th>Conf</th>
+                    <th>Date</th><th>Match</th><th>Exp FHG</th><th>Conf</th>
                     <th>Flags</th><th>Host / Visitor rates</th>
                     <th>Line</th><th>Odds</th><th>HT score</th><th>Results</th><th>Bet</th><th>Manual</th><th>Notes</th><th></th>
                 </tr>
@@ -218,7 +218,6 @@
         return `
             <tr data-id="${r.id}">
                 <td title="Per-match date: ${esc(r.match_date || r.match_date_iso || '—')}">${weekLabel(r)}</td>
-                <td>${esc(r.league || '—')}</td>
                 <td class="wrap"><strong>${esc(r.home_team)}</strong> vs <strong>${esc(r.away_team)}</strong></td>
                 <td><strong style="color:var(--accent)">${num(r.exp_fh_goals)}</strong></td>
                 <td>${esc(r.confidence || '')}</td>
@@ -269,7 +268,7 @@
             if (key !== curKey) {
                 curKey = key;
                 const label = (r.round ? 'Round ' + esc(r.round) : 'No round') + (r.league ? ' — ' + esc(r.league) : '');
-                html += `<tr class="divider"><td colspan="15">${label}</td></tr>`;
+                html += `<tr class="divider"><td colspan="14">${label}</td></tr>`;
             }
             html += rowHtml(r);
         }
