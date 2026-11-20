@@ -105,6 +105,26 @@
     function pctChip(v) { return v === null || v === undefined ? '—' : (Math.round(v * 10) / 10) + '%'; }
     function flag(name, on) { return on ? `<span class="chip flag">${name}</span>` : ''; }
 
+    // ISO-8601 week number (Thursday rule) from a YYYY-MM-DD string.
+    function isoWeek(dateStr) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || ''));
+        if (!m) return null;
+        const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+        const day = d.getUTCDay() || 7;                 // Mon=1 … Sun=7
+        d.setUTCDate(d.getUTCDate() + 4 - day);         // snap to the week's Thursday
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return { year: d.getUTCFullYear(), week: Math.ceil(((d - yearStart) / 86400000 + 1) / 7) };
+    }
+
+    // One date per save batch: all rows of a snapshot share its source_date,
+    // so the week number and the batch date are the same for the whole week's games.
+    function weekLabel(r) {
+        const base = r.source_date || r.match_date_iso;
+        const wk = isoWeek(base);
+        const dateTxt = base || '';
+        return (wk ? 'W' + wk.week + ' · ' : '') + (dateTxt || '—');
+    }
+
     function headers(extra) {
         const h = Object.assign({ 'Content-Type': 'application/json' }, extra || {});
         const k = localStorage.getItem('fhArchiveKey');
@@ -197,7 +217,7 @@
     function rowHtml(r) {
         return `
             <tr data-id="${r.id}">
-                <td>${esc(r.match_date || r.match_date_iso || '—')}</td>
+                <td title="Per-match date: ${esc(r.match_date || r.match_date_iso || '—')}">${weekLabel(r)}</td>
                 <td>${esc(r.league || '—')}</td>
                 <td class="wrap"><strong>${esc(r.home_team)}</strong> vs <strong>${esc(r.away_team)}</strong></td>
                 <td><strong style="color:var(--accent)">${num(r.exp_fh_goals)}</strong></td>
