@@ -93,8 +93,13 @@ export default async function handler(req, res) {
         ON CONFLICT (snapshot_id, home_team, away_team) DO UPDATE SET
           match_date = EXCLUDED.match_date, match_date_iso = EXCLUDED.match_date_iso,
           round = EXCLUDED.round, league = EXCLUDED.league,
-          exp_fh_goals = EXCLUDED.exp_fh_goals, confidence = EXCLUDED.confidence,
-          fh_match_flag = EXCLUDED.fh_match_flag, lean_note = EXCLUDED.lean_note,
+          -- First save wins for the prediction + decision columns: re-saving the same
+          -- league/date table after matches finished must never rewrite the pre-game
+          -- exp/confidence/flag or the bet the user actually took (look-ahead guard).
+          exp_fh_goals = COALESCE(fh_matchups.exp_fh_goals, EXCLUDED.exp_fh_goals),
+          confidence = COALESCE(fh_matchups.confidence, EXCLUDED.confidence),
+          fh_match_flag = COALESCE(fh_matchups.fh_match_flag, EXCLUDED.fh_match_flag),
+          lean_note = COALESCE(fh_matchups.lean_note, EXCLUDED.lean_note),
           host_fh_gpm_venue = EXCLUDED.host_fh_gpm_venue, host_rate_source = EXCLUDED.host_rate_source,
           host_venue_gp = EXCLUDED.host_venue_gp, host_fh_gpm_overall = EXCLUDED.host_fh_gpm_overall,
           host_hot = EXCLUDED.host_hot, host_1h_share_pct = EXCLUDED.host_1h_share_pct,
@@ -109,14 +114,16 @@ export default async function handler(req, res) {
           visitor_ht_lead_pct = EXCLUDED.visitor_ht_lead_pct, visitor_ht_trail_pct = EXCLUDED.visitor_ht_trail_pct,
           visitor_ht_scoreless_pct = EXCLUDED.visitor_ht_scoreless_pct, visitor_ht_2plus_pct = EXCLUDED.visitor_ht_2plus_pct,
           visitor_ht_cs_pct = EXCLUDED.visitor_ht_cs_pct,
-          league_fh_avg = EXCLUDED.league_fh_avg, league_2h_avg = EXCLUDED.league_2h_avg,
-          league_ht_draw_pct = EXCLUDED.league_ht_draw_pct,
+          league_fh_avg = COALESCE(fh_matchups.league_fh_avg, EXCLUDED.league_fh_avg),
+          league_2h_avg = COALESCE(fh_matchups.league_2h_avg, EXCLUDED.league_2h_avg),
+          league_ht_draw_pct = COALESCE(fh_matchups.league_ht_draw_pct, EXCLUDED.league_ht_draw_pct),
           host_fast_starter = EXCLUDED.host_fast_starter, visitor_fast_starter = EXCLUDED.visitor_fast_starter,
           host_above_avg = EXCLUDED.host_above_avg, visitor_above_avg = EXCLUDED.visitor_above_avg,
           splits_derived = EXCLUDED.splits_derived, above_avg_detail = EXCLUDED.above_avg_detail,
           verdict_badges = EXCLUDED.verdict_badges, extras = EXCLUDED.extras,
-          bet_line = EXCLUDED.bet_line, bet_market = EXCLUDED.bet_market,
-          odds = EXCLUDED.odds,
+          bet_line = COALESCE(fh_matchups.bet_line, EXCLUDED.bet_line),
+          bet_market = COALESCE(fh_matchups.bet_market, EXCLUDED.bet_market),
+          odds = COALESCE(fh_matchups.odds, EXCLUDED.odds),
           updated_at = now()
         RETURNING id
       `, matchupParams(snapshotId, m, home, away, exp));
