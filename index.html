@@ -3349,8 +3349,18 @@
             if (!h || !a) return null;
             const hVenue = h.homeGpm !== null ? h.homeGpm : h.goalsPerMatch;
             const aVenue = a.awayGpm !== null ? a.awayGpm : a.goalsPerMatch;
-            const confidence = h.homeGpm !== null && a.awayGpm !== null ? 'HIGH' : (h.homeGpm !== null || a.awayGpm !== null) ? 'MEDIUM' : 'LOW';
-            return { home: h, away: a, hVenue, aVenue, exp: (hVenue + aVenue) / 2, confidence };
+            const exp = (hVenue + aVenue) / 2;
+            // Confidence starts from data completeness (both venue splits known = HIGH)
+            // and is then capped by pick strength, so weak expected FH goals never carry HIGH:
+            //   below the league's FH pace               -> LOW  (weak pick whatever the data)
+            //   at/above league pace, below the 1.5 line -> at most MEDIUM (below the FH MATCH lean)
+            //   at/above 1.5                             -> uncapped (HIGH still needs both venue splits)
+            // League average unknown (no averages table) -> 1.0 fallback.
+            const leagueFH = fhLeagueBaselines && fhLeagueBaselines.fh !== null ? fhLeagueBaselines.fh : 1.0;
+            let confidence = h.homeGpm !== null && a.awayGpm !== null ? 'HIGH' : (h.homeGpm !== null || a.awayGpm !== null) ? 'MEDIUM' : 'LOW';
+            if (exp < leagueFH) confidence = 'LOW';
+            else if (exp < 1.5 && confidence === 'HIGH') confidence = 'MEDIUM';
+            return { home: h, away: a, hVenue, aVenue, exp, confidence };
         }
 
         function getUpcomingFHMatchups(fixtures, fromDateUK) {

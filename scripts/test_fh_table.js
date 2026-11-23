@@ -68,6 +68,14 @@ const AWAY_TABLE = [
   '6\tJong FC Utrecht\t7\t1\t2\t4\t7\t9\t-2\t5'
 ].join('\n');
 
+// Date-bomb guard: "upcoming" fixtures must stay in the future no matter when
+// the suite runs (a hardcoded date aged into the past and broke the panel tests).
+const ukFromNow = days => {
+  const t = new Date();
+  t.setDate(t.getDate() + days);
+  return `${String(t.getDate()).padStart(2, '0')}/${String(t.getMonth() + 1).padStart(2, '0')}/${t.getFullYear()}`;
+};
+
 // 3) Sandbox
 const panelEl = { hidden: true };
 const els = {
@@ -347,6 +355,24 @@ check('matchups: Almere v VVV exp 1.57 hot (>= 1.5)', mus[1].homeTeam === 'Almer
 vm.runInContext('renderFHMatchups()', sandbox);
 check('matchups panel: card + FH MATCH + confidence', els.fhMatchupsContent.innerHTML.includes('2.00 exp. FH goals') && els.fhMatchupsContent.innerHTML.includes('FH MATCH') && els.fhMatchupsContent.innerHTML.includes('confidence HIGH'), els.fhMatchupsContent.innerHTML.slice(0, 200));
 
+// --- Test 10c: confidence scales down with weak expected FH goals ---
+// Venue GPMs (GF+GA)/GP: Heracles home 2.43 / away 1.71, Volendam home 1.71 / away 1.57,
+// Almere home 1.00 / away 1.00, VVV away 2.14, NAC home 1.43 / away 1.43.
+const confFor = (home, away) => JSON.parse(vm.runInContext(`JSON.stringify(expectedFHGoals('${home}','${away}'))`, sandbox));
+const origFH = vm.runInContext('fhLeagueBaselines.fh', sandbox);
+vm.runInContext('fhLeagueBaselines.fh = 1.31', sandbox);
+check('conf: strong pick (2.00 >= 1.5, above pace, full data) keeps HIGH', confFor('Heracles Almelo', 'FC Volendam').confidence === 'HIGH');
+vm.runInContext('fhLeagueBaselines.fh = 2.10', sandbox);
+const slowPick = confFor('Heracles Almelo', 'FC Volendam');
+check('conf: exp below league pace (2.00 < 2.10) -> LOW despite full data', slowPick.exp.toFixed(2) === '2.00' && slowPick.confidence === 'LOW', JSON.stringify(slowPick));
+vm.runInContext('fhLeagueBaselines.fh = 1.31', sandbox);
+const midPick = confFor('Almere City', 'Heracles Almelo');
+check('conf: above pace but below 1.5 line (1.36) caps HIGH -> MEDIUM', midPick.exp.toFixed(2) === '1.36' && midPick.confidence === 'MEDIUM', JSON.stringify(midPick));
+vm.runInContext('fhLeagueBaselines.fh = null', sandbox);
+const noBase = confFor('Almere City', 'Heracles Almelo');
+check('conf: no league baseline -> 1.0 fallback, 1.36 still capped MEDIUM', noBase.exp.toFixed(2) === '1.36' && noBase.confidence === 'MEDIUM', JSON.stringify(noBase));
+vm.runInContext(`fhLeagueBaselines.fh = ${origFH === null ? 'null' : origFH}`, sandbox);
+
 // --- Test 10b: fixture + home/away dropdowns + selected-match card ---
 check('dropdowns: fixture select lists upcoming only', els.fhFixtureSelect.innerHTML.includes('Heracles Almelo vs FC Volendam') && els.fhFixtureSelect.innerHTML.includes('Almere City vs VVV-Venlo') && !els.fhFixtureSelect.innerHTML.includes('01/01/2000'), els.fhFixtureSelect.innerHTML);
 check('dropdowns: team selects have FH + fixture teams', els.fhHomeSelect.innerHTML.includes('<option value="Heracles Almelo">') && els.fhHomeSelect.innerHTML.includes('<option value="Real Madrid">') && els.fhHomeSelect.innerHTML.includes('<option value="FC Den Bosch">'), els.fhHomeSelect.innerHTML.slice(0, 300));
@@ -546,7 +572,7 @@ ${TRAIL_TABLE}
   check('insight: Heracles 2H 1.14 + FH share 64.4%', Math.abs(ins.shOverall - 16 / 14) < 1e-9 && Math.abs(ins.share - 29 / 45 * 100) < 1e-9, JSON.stringify(ins));
   check('insight: HT draw 21% / 0-scr 14% / 2+ 50% / CS 29% / lead 64% / trail 21%', Math.abs(ins.drawPct - 3 / 14 * 100) < 1e-9 && ins.s0Pct === 14 && ins.s2PlusPct === 50 && ins.c0Pct === 29 && ins.leadPct === 64 && ins.trailPct === 21, JSON.stringify(ins));
   check('render: FH Insight table + baseline line + Fast starter tag', els.fhTableContent.innerHTML.includes('FH Insight') && els.fhTableContent.innerHTML.includes('League baseline: first half <strong>1.77</strong>') && els.fhTableContent.innerHTML.includes('second half <strong>1.50</strong>') && els.fhTableContent.innerHTML.includes('Fast starter'), els.fhTableContent.innerHTML.slice(0, 120));
-  vm.runInContext(`globalFixtures = [{ date: '20/11/2026', round: 'R16', league: 'Netherlands - Eerste Divisie', homeTeam: 'Heracles Almelo', awayTeam: 'FC Volendam' }]`, sandbox);
+  vm.runInContext(`globalFixtures = [{ date: '${ukFromNow(7)}', round: 'R16', league: 'Netherlands - Eerste Divisie', homeTeam: 'Heracles Almelo', awayTeam: 'FC Volendam' }]`, sandbox);
   vm.runInContext('renderFHMatchups()', sandbox);
   check('matchups: league FH avg shown in card line', els.fhMatchupsContent.innerHTML.includes('league FH avg 1.77'), els.fhMatchupsContent.innerHTML.slice(0, 300));
   els.fhHomeSelect.value = 'Heracles Almelo';
