@@ -3446,6 +3446,22 @@
             return (globalFixtures || []).find(f => f.homeTeam === homeTeam && f.awayTeam === awayTeam) || null;
         }
 
+        // Venue tilt verdict for a pairing, using each team's venue-skew profile from the
+        // Home/Away tables ('Home-tilted' / 'Away-tilted' at 0.25 G/M, 'Balanced' — the same
+        // rule as the table badge). MATCH: both sides at their productive venue (host
+        // Home-tilted + visitor Away-tilted). CLASH: both at their weaker venue (quiet first-
+        // half lean). MISMATCH: one productive, one weaker. Balanced or one-sided profiles
+        // carry no direction, so they produce no verdict.
+        function fhVenueTiltVerdict(hostProfile, visitorProfile) {
+            const directional = p => p === 'Home-tilted' || p === 'Away-tilted' ? p : null;
+            const h = directional(hostProfile), v = directional(visitorProfile);
+            if (!h || !v) return null;
+            const hostStrong = h === 'Home-tilted', visitorStrong = v === 'Away-tilted';
+            if (hostStrong && visitorStrong) return { kind: 'MATCH', label: 'TILT MATCH \u2014 both teams at their productive venue', color: '#28a745' };
+            if (!hostStrong && !visitorStrong) return { kind: 'CLASH', label: 'TILT CLASH \u2014 both teams at their weaker venue (quiet first-half lean)', color: '#6f42c1' };
+            return { kind: 'MISMATCH', label: 'TILT MISMATCH \u2014 one side at its productive venue, the other at its weaker venue', color: '#fd7e14' };
+        }
+
         // Detailed card for the matchup picked via the dropdowns: host Home FH rate + visitor Away FH
         // rate blended into expected FH goals, with confidence and FH MATCH flag at 1.5+.
         function renderFHSelectedMatch() {
@@ -3476,6 +3492,14 @@
             html += '<div style="margin:8px 0 10px; font-size:22px;"><strong style="color:#e83e8c;">' + e.exp.toFixed(2) + '</strong> <span style="font-size:13px; color:#6c757d;">expected FH goals</span> <span class="highlight-badge" style="background:' + confColor + ';">' + e.confidence + '</span>' + (e.exp >= 1.5 ? ' <span class="highlight-badge" style="background:#e83e8c;">FH MATCH</span> <span style="font-size:12px; color:#6c757d;">Over 0.5 FH / FH BTTS lean</span>' : '') + '</div>';
             html += '<div style="font-size:13px; margin-bottom:4px;">Host: <strong>' + escFh(homeTeam) + '</strong> &mdash; ' + hostRate.v.toFixed(2) + ' FH goals/match (' + hostRate.src + ', ' + hostRate.gp + ' GP) &middot; overall ' + hRow.goalsPerMatch.toFixed(2) + (hRow.entertaining ? ' <span class="highlight-badge" style="background:#e83e8c;">FH HOT</span>' : '') + '</div>';
             html += '<div style="font-size:13px;">Visitor: <strong>' + escFh(awayTeam) + '</strong> &mdash; ' + visitRate.v.toFixed(2) + ' FH goals/match (' + visitRate.src + ', ' + visitRate.gp + ' GP) &middot; overall ' + aRow.goalsPerMatch.toFixed(2) + (aRow.entertaining ? ' <span class="highlight-badge" style="background:#e83e8c;">FH HOT</span>' : '') + '</div>';
+            // Venue tilt verdict: is each side playing at the venue its FH production skews toward?
+            // (profiles come from the Home/Away tables — Home-tilted / Away-tilted at 0.25 G/M.)
+            const tilt = fhVenueTiltVerdict(hRow && hRow.profile, aRow && aRow.profile);
+            if (tilt) {
+                html += '<div style="margin-top:6px;"><span class="highlight-badge" style="background:' + tilt.color + ';">' + escFh(tilt.label) + '</span></div>';
+            } else if (hRow && aRow && (hRow.profile || aRow.profile)) {
+                html += '<div style="margin-top:6px; color:#6c757d;">Venue tilt: host ' + escFh(hRow.profile || 'unknown') + ' &middot; visitor ' + escFh(aRow.profile || 'unknown') + ' &mdash; no pairing verdict</div>';
+            }
             // Same-page extras: 1H vs 2H contrast + HT records for both teams + verdict badges.
             const hIns = fhInsightFor(homeTeam, 'home');
             const aIns = fhInsightFor(awayTeam, 'away');
@@ -3564,6 +3588,9 @@
                 visitor_ht_scoreless_pct: aIns ? aIns.s0Pct : null,
                 visitor_ht_2plus_pct: aIns ? aIns.s2PlusPct : null,
                 visitor_ht_cs_pct: aIns ? aIns.c0Pct : null,
+                host_venue_tilt: h.profile || null,
+                visitor_venue_tilt: a.profile || null,
+                tilt_match: (fhVenueTiltVerdict(h.profile, a.profile) || {}).kind || null,
                 league_fh_avg: leagueFH, league_2h_avg: fhLeagueBaselines.sh, league_ht_draw_pct: fhLeagueBaselines.htDraw,
                 splits_derived: fhSplitSource,
                 above_avg_detail: {

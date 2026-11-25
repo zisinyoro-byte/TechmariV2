@@ -75,7 +75,8 @@ export default async function handler(req, res) {
           visitor_ht_scoreless_pct, visitor_ht_2plus_pct, visitor_ht_cs_pct,
           league_fh_avg, league_2h_avg, league_ht_draw_pct,
           host_fast_starter, visitor_fast_starter, host_above_avg, visitor_above_avg,
-          splits_derived, above_avg_detail, verdict_badges, extras, bet_line, bet_market, odds
+          splits_derived, above_avg_detail, verdict_badges, extras, bet_line, bet_market, odds,
+          host_venue_tilt, visitor_venue_tilt, tilt_match
         ) VALUES (
           $1,$2,$3::date,$4,$5,$6,$7,
           $8,$9,$10,$11,
@@ -88,7 +89,8 @@ export default async function handler(req, res) {
           $38,$39,$40,
           $41,$42,$43,$44,
           $45::jsonb,$46::jsonb,$47::jsonb,$48::jsonb,
-          $49, $50, $51
+          $49, $50, $51,
+          $52, $53, $54
         )
         ON CONFLICT (snapshot_id, home_team, away_team) DO UPDATE SET
           match_date = EXCLUDED.match_date, match_date_iso = EXCLUDED.match_date_iso,
@@ -119,6 +121,8 @@ export default async function handler(req, res) {
           league_ht_draw_pct = COALESCE(fh_matchups.league_ht_draw_pct, EXCLUDED.league_ht_draw_pct),
           host_fast_starter = EXCLUDED.host_fast_starter, visitor_fast_starter = EXCLUDED.visitor_fast_starter,
           host_above_avg = EXCLUDED.host_above_avg, visitor_above_avg = EXCLUDED.visitor_above_avg,
+          host_venue_tilt = EXCLUDED.host_venue_tilt, visitor_venue_tilt = EXCLUDED.visitor_venue_tilt,
+          tilt_match = EXCLUDED.tilt_match,
           splits_derived = EXCLUDED.splits_derived, above_avg_detail = EXCLUDED.above_avg_detail,
           verdict_badges = EXCLUDED.verdict_badges, extras = EXCLUDED.extras,
           bet_line = COALESCE(fh_matchups.bet_line, EXCLUDED.bet_line),
@@ -202,6 +206,9 @@ function matchupParams(snapshotId, m, home, away, exp) {
     lineIn !== null ? lineIn : defaultFhLine(exp),
     strOrNull(m.bet_market, 12) || 'FH_OVER',
     numOrNull(m.odds, 1.01, 100),
+    strOrNull(m.host_venue_tilt, 12),
+    strOrNull(m.visitor_venue_tilt, 12),
+    strOrNull(m.tilt_match, 12),
   ];
 }
 

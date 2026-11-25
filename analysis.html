@@ -88,7 +88,7 @@
             <thead>
                 <tr>
                     <th>Date</th><th>Match</th><th>Exp FHG</th><th>Conf</th>
-                    <th>Flags</th><th>Host / Visitor rates</th>
+                    <th>Flags</th><th>Host / Visitor rates</th><th>Tilt</th>
                     <th>Line</th><th>Odds</th><th>HT score</th><th>FT score</th><th>Results</th><th>Bet</th><th>Manual</th><th>Notes</th><th></th>
                 </tr>
             </thead>
@@ -222,6 +222,20 @@
         return '';
     }
 
+    // Venue tilt verdict, captured at save time (same rule as index.html's table badge:
+    // Home-tilted / Away-tilted at 0.25 G/M). MATCH = both sides at their productive venue
+    // (host Home-tilted + visitor Away-tilted); CLASH = both at their weaker venue;
+    // MISMATCH = one productive, one weaker; rows saved before this field existed show —.
+    function tiltChip(r) {
+        const ht = r.host_venue_tilt, vt = r.visitor_venue_tilt, tm = r.tilt_match;
+        if (!ht && !vt && !tm) return '<span style="color:var(--mut)">—</span>';
+        const title = 'Host ' + esc(ht || 'unknown') + ' · Visitor ' + esc(vt || 'unknown');
+        if (tm === 'MATCH') return '<span class="chip flag" title="' + title + '" style="background:#28a745;">TILT MATCH</span>';
+        if (tm === 'CLASH') return '<span class="chip flag" title="' + title + '" style="background:#6f42c1;">TILT CLASH</span>';
+        if (tm === 'MISMATCH') return '<span class="chip flag" title="' + title + '" style="background:#fd7e14;">MISMATCH</span>';
+        return '<span class="chip flag" title="' + title + '" style="background:#adb5bd;">no verdict</span>';
+    }
+
     // Team-level FH hot (overall FH goals/match >= 1.5), shown per side like FS chips.
     function hotChip(r) {
         const h = r.host_hot === true, v = r.visitor_hot === true;
@@ -253,6 +267,7 @@
                 <td>${esc(r.confidence || '')}</td>
                 <td>${fsChip(r)}${hotChip(r)}${flag('AVG', r.host_above_avg && r.visitor_above_avg)}${flag('MATCH', r.fh_match_flag, 'FH MATCH: expected FH goals &ge; 1.5')}</td>
                 <td>${num(r.host_fh_gpm_venue)} / ${num(r.visitor_fh_gpm_venue)}</td>
+                <td>${tiltChip(r)}</td>
                 <td><input type="number" step="0.5" min="0" max="15" style="width:64px" value="${r.bet_line === null || r.bet_line === undefined ? '' : r.bet_line}" aria-label="Bet line (FH goals)"></td>
                 <td><input type="number" step="0.01" min="1.01" max="100" style="width:60px" value="${r.odds === null || r.odds === undefined ? '' : r.odds}" aria-label="Decimal odds"></td>
                 <td>
@@ -302,7 +317,7 @@
             if (key !== curKey) {
                 curKey = key;
                 const label = (r.round ? 'Round ' + esc(r.round) : 'No round') + (r.league ? ' — ' + esc(r.league) : '');
-                html += `<tr class="divider"><td colspan="15">${label}</td></tr>`;
+                html += `<tr class="divider"><td colspan="16">${label}</td></tr>`;
             }
             html += rowHtml(r);
         }

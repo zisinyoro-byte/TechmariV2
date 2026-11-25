@@ -167,6 +167,7 @@ ${extract('refreshFHFixtureDropdowns')}
 ${extract('onFHFixtureSelect')}
 ${extract('onFHTeamSelect')}
 ${extract('findFHFixtureFor')}
+${extract('fhVenueTiltVerdict')}
 ${extract('renderFHSelectedMatch')}
 ${extract('clearFHData')}
 ${extract('buildFHFileSlug')}
@@ -234,6 +235,16 @@ check('variant: second half away', vm.runInContext(`detectFHVARIANT('Second Half
 check('variant: data row -> null', vm.runInContext(`detectFHVARIANT('1\tHeracles Almelo\t14\t10\t3\t1\t23\t6\t+17\t33')`, sandbox) === null);
 check('league embedded in FH title', vm.runInContext(`extractLeagueFromFhTitle('Eerste Divisie - First Half home table')`, sandbox) === 'Eerste Divisie');
 check('no league embedded -> ""', vm.runInContext(`extractLeagueFromFhTitle('First Half table (1-45 min.)')`, sandbox) === '');
+
+// --- Test 2b-bis: venue tilt pairing verdict (host profile vs visitor profile) ---
+check('tilt verdict: Home-tilted host + Away-tilted visitor -> MATCH', vm.runInContext(`fhVenueTiltVerdict('Home-tilted', 'Away-tilted').kind`, sandbox) === 'MATCH');
+check('tilt verdict: Away-tilted host + Home-tilted visitor -> CLASH', vm.runInContext(`fhVenueTiltVerdict('Away-tilted', 'Home-tilted').kind`, sandbox) === 'CLASH');
+check('tilt verdict: Home-tilted + Home-tilted -> MISMATCH', vm.runInContext(`fhVenueTiltVerdict('Home-tilted', 'Home-tilted').kind`, sandbox) === 'MISMATCH');
+check('tilt verdict: Away-tilted + Away-tilted -> MISMATCH', vm.runInContext(`fhVenueTiltVerdict('Away-tilted', 'Away-tilted').kind`, sandbox) === 'MISMATCH');
+check('tilt verdict: Balanced side -> no verdict', vm.runInContext(`fhVenueTiltVerdict('Home-tilted', 'Balanced') === null && fhVenueTiltVerdict('Balanced', 'Away-tilted') === null`, sandbox) === true);
+check('tilt verdict: one-sided profile (Home only) -> no verdict', vm.runInContext(`fhVenueTiltVerdict('Home only', 'Away-tilted') === null`, sandbox) === true);
+check('tilt verdict: missing profile -> no verdict', vm.runInContext(`fhVenueTiltVerdict(null, 'Away-tilted') === null && fhVenueTiltVerdict('Home-tilted', undefined) === null`, sandbox) === true);
+check('tilt colors: MATCH green / CLASH purple / MISMATCH amber', (() => { const a = vm.runInContext(`fhVenueTiltVerdict('Home-tilted', 'Away-tilted')`, sandbox), b = vm.runInContext(`fhVenueTiltVerdict('Away-tilted', 'Home-tilted')`, sandbox), c = vm.runInContext(`fhVenueTiltVerdict('Home-tilted', 'Home-tilted')`, sandbox); return a.color === '#28a745' && b.color === '#6f42c1' && c.color === '#fd7e14'; })());
 
 // --- Test 2c: parseFHPaste segmentation ---
 const segs = JSON.parse(vm.runInContext(`JSON.stringify(parseFHPaste((${JSON.stringify(SAMPLE + '\n\n' + HOME_TABLE + '\n\n' + AWAY_TABLE)}).split('\\n').map(l => l.trim()).filter(l => l.length > 0)))`, sandbox));
