@@ -92,7 +92,11 @@ export default async function handler(req, res) {
           $49, $50, $51,
           $52, $53, $54
         )
-        ON CONFLICT (snapshot_id, home_team, away_team) DO UPDATE SET
+        -- Game-scoped dedupe: the same fixture (same teams, round and date, case-insensitive)
+        -- must UPDATE its existing row wherever it lives, never insert a sibling row under a
+        -- new snapshot (a save session on a later day creates a new snapshot — the game is
+        -- the identity, not the snapshot). Backed by uq_fh_matchups_game.
+        ON CONFLICT (lower(home_team), lower(away_team), coalesce(round, ''), coalesce(match_date_iso, '0001-01-01'::date)) DO UPDATE SET
           match_date = EXCLUDED.match_date, match_date_iso = EXCLUDED.match_date_iso,
           round = EXCLUDED.round, league = EXCLUDED.league,
           -- First save wins for the prediction + decision columns: re-saving the same
